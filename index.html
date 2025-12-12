@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>🎵 성탄 칸타타 연습</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <!-- 헤더 -->
+        <header class="header">
+            <div class="header-content">
+                <h1>🎻 성탄 칸타타</h1>
+                <p class="subtitle">바이올린 연습 플레이어</p>
+            </div>
+            <button id="syncBtn" class="sync-btn" title="FTP 동기화">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+                </svg>
+            </button>
+        </header>
+
+        <!-- 파일 목록 -->
+        <section class="file-list-section">
+            <div class="section-header">
+                <h2>📂 연습 파일</h2>
+                <span id="fileCount" class="file-count">0개</span>
+            </div>
+            <div id="fileList" class="file-list">
+                <div class="loading">파일 로딩 중...</div>
+            </div>
+        </section>
+
+        <!-- 플레이어 -->
+        <section id="playerSection" class="player-section hidden">
+            
+            <!-- 웨이브폼 영역 -->
+            <div class="waveform-wrapper">
+                <!-- 현재 재생 시간 말풍선 -->
+                <div id="currentTimeBubble" class="current-time-bubble">00:00.0</div>
+                
+                <!-- 트랙 이름 -->
+                <div id="trackNameOverlay" class="track-name-overlay">-</div>
+                
+                <!-- 웨이브폼 + 마커 컨테이너 -->
+                <div class="waveform-container" id="waveformContainer">
+                    <canvas id="waveformCanvas"></canvas>
+                    
+                    <!-- 반복 구간 배경 -->
+                    <div id="loopRegion" class="loop-region"></div>
+                    
+                    <!-- A 마커 (시작점) - 드래그 가능 -->
+                    <div id="markerA" class="loop-marker loop-marker-a">
+                        <span class="marker-label">A</span>
+                    </div>
+                    
+                    <!-- B 마커 (끝점) - 드래그 가능 -->
+                    <div id="markerB" class="loop-marker loop-marker-b">
+                        <span class="marker-label">B</span>
+                    </div>
+                    
+                    <!-- 재생 헤드 -->
+                    <div id="playhead" class="playhead"></div>
+                </div>
+                
+                <!-- 시간 표시 (하단) -->
+                <div class="time-display">
+                    <span id="loopStartDisplay" class="time-edge">00:00.0</span>
+                    <div id="loopTimeCenter" class="loop-time-center">
+                        <span id="selectedDuration">00:00.0</span>
+                    </div>
+                    <span id="loopEndDisplay" class="time-edge end">00:00.0</span>
+                </div>
+            </div>
+
+            <!-- 메인 컨트롤 -->
+            <div class="controls-main">
+                <button id="skipBackBtn" class="control-btn" title="-5초">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/>
+                    </svg>
+                </button>
+                <button id="playBtn" class="play-btn" title="재생">
+                    <svg class="play-icon" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M8 5v14l11-7z"/>
+                    </svg>
+                    <svg class="pause-icon hidden" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+                    </svg>
+                </button>
+                <button id="skipForwardBtn" class="control-btn" title="+5초">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 5V1l5 5-5 5V7c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6h2c0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8z"/>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- 구간 반복 컨트롤 (심플) -->
+            <div class="loop-controls">
+                <button id="setLoopBtn" class="loop-toggle-btn" title="구간 반복 켜기/끄기">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M17 2l4 4-4 4M3 11V9a4 4 0 014-4h14M7 22l-4-4 4-4M21 13v2a4 4 0 01-4 4H3"/>
+                    </svg>
+                    <span>반복</span>
+                </button>
+                <button id="resetLoopBtn" class="reset-btn" title="구간 초기화">
+                    ✕
+                </button>
+            </div>
+
+            <!-- 속도 조절 -->
+            <div class="speed-control">
+                <span class="speed-label">속도</span>
+                <div class="speed-buttons">
+                    <button class="speed-btn" data-speed="0.5">0.5×</button>
+                    <button class="speed-btn" data-speed="0.75">0.75×</button>
+                    <button class="speed-btn active" data-speed="1">1×</button>
+                    <button class="speed-btn" data-speed="1.25">1.25×</button>
+                    <button class="speed-btn" data-speed="1.5">1.5×</button>
+                </div>
+            </div>
+
+            <!-- 볼륨 -->
+            <div class="volume-control">
+                <svg viewBox="0 0 24 24" fill="currentColor" class="volume-icon">
+                    <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+                </svg>
+                <input type="range" id="volumeSlider" min="0" max="1" step="0.01" value="1">
+            </div>
+        </section>
+
+        <!-- 오디오 요소 -->
+        <audio id="audioPlayer" preload="auto" playsinline></audio>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

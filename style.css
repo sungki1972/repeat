@@ -1,0 +1,670 @@
+/* 🎵 성탄 칸타타 바이올린 연습 플레이어 - 스타일 */
+
+:root {
+    /* 색상 테마 - 진한 파랑 + 밝은 청록 */
+    --primary: #00e5c7;
+    --primary-dark: #00b89c;
+    --primary-light: #5fffeb;
+    --secondary: #0a3d62;
+    --secondary-dark: #051d30;
+    
+    /* 배경 */
+    --bg-gradient: linear-gradient(180deg, #0d2137 0%, #0a1929 100%);
+    --card-bg: rgba(10, 45, 80, 0.7);
+    --card-border: rgba(0, 229, 199, 0.15);
+    
+    /* 텍스트 */
+    --text-primary: #ffffff;
+    --text-secondary: #7fb8d8;
+    --text-muted: #4a7a9a;
+    
+    /* 웨이브폼 - 대비 강화 */
+    --waveform-bg: #0a2845;
+    --waveform-color: #1abc9c;
+    --waveform-played: #2eec94;
+    --loop-region: rgba(0, 229, 199, 0.15);
+    --loop-border: #00e5c7;
+    
+    /* 크기 */
+    --radius: 12px;
+    --radius-sm: 8px;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+    height: 100%;
+    overflow-x: hidden;
+}
+
+body {
+    font-family: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg-gradient);
+    color: var(--text-primary);
+    line-height: 1.5;
+    min-height: 100vh;
+}
+
+.app-container {
+    position: relative;
+    z-index: 1;
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 16px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* 헤더 */
+.header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius);
+    backdrop-filter: blur(10px);
+}
+
+.header-content h1 {
+    font-size: 1.4rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--primary-light), var(--primary));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.subtitle {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin-top: 2px;
+}
+
+.sync-btn {
+    width: 44px;
+    height: 44px;
+    border: none;
+    background: rgba(0, 229, 199, 0.12);
+    border-radius: var(--radius-sm);
+    color: var(--primary);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.sync-btn svg {
+    width: 22px;
+    height: 22px;
+}
+
+.sync-btn:hover {
+    background: rgba(0, 229, 199, 0.2);
+    transform: rotate(180deg);
+}
+
+.sync-btn.syncing svg {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* 파일 목록 섹션 */
+.file-list-section {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius);
+    backdrop-filter: blur(10px);
+    overflow: hidden;
+}
+
+.section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--card-border);
+}
+
+.section-header h2 {
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.file-count {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.file-list {
+    max-height: 200px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--primary-dark) transparent;
+}
+
+.file-list::-webkit-scrollbar {
+    width: 5px;
+}
+
+.file-list::-webkit-scrollbar-thumb {
+    background: var(--primary-dark);
+    border-radius: 3px;
+}
+
+.file-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    cursor: pointer;
+    transition: background 0.2s ease;
+    border-bottom: 1px solid rgba(0, 229, 199, 0.05);
+}
+
+.file-item:last-child {
+    border-bottom: none;
+}
+
+.file-item:hover {
+    background: rgba(0, 229, 199, 0.08);
+}
+
+.file-item.active {
+    background: rgba(0, 229, 199, 0.12);
+}
+
+.file-icon {
+    font-size: 1.1rem;
+}
+
+.file-name {
+    flex: 1;
+    font-size: 0.88rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.file-size {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.loading {
+    padding: 24px;
+    text-align: center;
+    color: var(--text-muted);
+}
+
+/* 플레이어 섹션 */
+.player-section {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius);
+    backdrop-filter: blur(10px);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.player-section.hidden {
+    display: none;
+}
+
+/* ========================================
+   웨이브폼 + A-B 구간 선택
+   ======================================== */
+
+.waveform-wrapper {
+    position: relative;
+    padding-top: 40px;
+    padding-bottom: 8px;
+}
+
+/* 현재 재생 시간 말풍선 */
+.current-time-bubble {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(255, 255, 255, 0.95);
+    color: #0a1929;
+    padding: 5px 14px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+    z-index: 10;
+    pointer-events: none;
+}
+
+.current-time-bubble::after {
+    content: '';
+    position: absolute;
+    bottom: -7px;
+    left: 50%;
+    transform: translateX(-50%);
+    border-left: 7px solid transparent;
+    border-right: 7px solid transparent;
+    border-top: 7px solid rgba(255, 255, 255, 0.95);
+}
+
+/* 트랙 이름 */
+.track-name-overlay {
+    position: absolute;
+    top: 50px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: var(--primary);
+    font-size: 0.85rem;
+    font-weight: 500;
+    z-index: 5;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
+    white-space: nowrap;
+    pointer-events: none;
+}
+
+/* 웨이브폼 컨테이너 */
+.waveform-container {
+    position: relative;
+    height: 110px;
+    background: var(--waveform-bg);
+    border-radius: var(--radius-sm);
+    overflow: visible;
+    cursor: pointer;
+    touch-action: none;
+}
+
+#waveformCanvas {
+    width: 100%;
+    height: 100%;
+    border-radius: var(--radius-sm);
+}
+
+/* 현재 재생 위치 라인 */
+.playhead {
+    position: absolute;
+    top: -6px;
+    left: 0;
+    width: 2px;
+    height: calc(100% + 12px);
+    background: #fff;
+    box-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+    pointer-events: none;
+    z-index: 4;
+}
+
+/* A-B 구간 영역 */
+.loop-region {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    background: var(--loop-region);
+    pointer-events: none;
+    z-index: 1;
+}
+
+/* A-B 마커 (드래그 가능한 세로 막대) */
+.loop-marker {
+    position: absolute;
+    top: -10px;
+    width: 8px;
+    height: calc(100% + 20px);
+    background: var(--primary);
+    border-radius: 4px;
+    cursor: ew-resize;
+    z-index: 6;
+    touch-action: none;
+    box-shadow: 0 0 15px rgba(0, 229, 199, 0.7);
+    transition: transform 0.1s, box-shadow 0.2s;
+    transform: translateX(-50%);
+}
+
+.loop-marker:hover,
+.loop-marker.dragging {
+    background: var(--primary-light);
+    box-shadow: 0 0 25px rgba(0, 229, 199, 1);
+    transform: translateX(-50%) scaleX(1.3);
+}
+
+/* 마커 라벨 */
+.marker-label {
+    position: absolute;
+    top: -24px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--primary);
+    color: #0a1929;
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 4px;
+    white-space: nowrap;
+}
+
+/* 시간 표시 (하단) */
+.time-display {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 4px;
+    margin-top: 10px;
+}
+
+.time-edge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    min-width: 55px;
+}
+
+.time-edge.end {
+    text-align: right;
+}
+
+.loop-time-center {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.9rem;
+    color: var(--primary);
+    font-weight: 500;
+}
+
+/* 메인 컨트롤 */
+.controls-main {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    margin-top: 8px;
+}
+
+.control-btn {
+    width: 52px;
+    height: 52px;
+    border: none;
+    background: rgba(0, 229, 199, 0.1);
+    border-radius: 50%;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.control-btn svg {
+    width: 26px;
+    height: 26px;
+}
+
+.control-btn:hover {
+    background: rgba(0, 229, 199, 0.2);
+    transform: scale(1.05);
+}
+
+.control-btn:active {
+    transform: scale(0.95);
+}
+
+.play-btn {
+    width: 72px;
+    height: 72px;
+    border: none;
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    border-radius: 50%;
+    color: #0a1929;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 24px rgba(0, 229, 199, 0.5);
+}
+
+.play-btn svg {
+    width: 32px;
+    height: 32px;
+}
+
+.play-btn .play-icon {
+    margin-left: 4px;
+}
+
+.play-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 6px 32px rgba(0, 229, 199, 0.6);
+}
+
+.play-btn:active {
+    transform: scale(0.95);
+}
+
+.play-btn svg.hidden {
+    display: none;
+}
+
+/* 구간 반복 컨트롤 (심플) */
+.loop-controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+}
+
+.loop-toggle-btn {
+    width: 100px;
+    height: 48px;
+    border: 2px solid var(--secondary);
+    background: transparent;
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-size: 0.85rem;
+}
+
+.loop-toggle-btn svg {
+    width: 18px;
+    height: 18px;
+}
+
+.loop-toggle-btn:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+.loop-toggle-btn.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: #0a1929;
+}
+
+.reset-btn {
+    width: 48px;
+    height: 48px;
+    border: 1px solid rgba(255, 100, 100, 0.3);
+    background: rgba(255, 100, 100, 0.08);
+    border-radius: var(--radius-sm);
+    color: #ff7777;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+}
+
+.reset-btn:hover {
+    background: rgba(255, 100, 100, 0.15);
+    border-color: rgba(255, 100, 100, 0.5);
+}
+
+/* 속도 조절 */
+.speed-control {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.speed-label {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    min-width: 30px;
+}
+
+.speed-buttons {
+    display: flex;
+    gap: 6px;
+    flex: 1;
+}
+
+.speed-btn {
+    flex: 1;
+    height: 36px;
+    border: 1px solid rgba(0, 229, 199, 0.2);
+    background: transparent;
+    border-radius: 6px;
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    font-family: 'JetBrains Mono', monospace;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.speed-btn:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+.speed-btn.active {
+    background: rgba(0, 229, 199, 0.15);
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+/* 볼륨 */
+.volume-control {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.volume-icon {
+    width: 20px;
+    height: 20px;
+    color: var(--text-muted);
+}
+
+#volumeSlider {
+    flex: 1;
+    height: 6px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: rgba(0, 229, 199, 0.2);
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+#volumeSlider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 18px;
+    height: 18px;
+    background: var(--primary);
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0, 229, 199, 0.5);
+}
+
+#volumeSlider::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    background: var(--primary);
+    border-radius: 50%;
+    cursor: pointer;
+    border: none;
+    box-shadow: 0 2px 8px rgba(0, 229, 199, 0.5);
+}
+
+/* 반응형 */
+@media (max-width: 480px) {
+    .app-container {
+        padding: 10px;
+        gap: 12px;
+    }
+    
+    .header {
+        padding: 12px 14px;
+    }
+    
+    .header-content h1 {
+        font-size: 1.2rem;
+    }
+    
+    .player-section {
+        padding: 14px;
+    }
+    
+    .waveform-container {
+        height: 100px;
+    }
+    
+    .play-btn {
+        width: 64px;
+        height: 64px;
+    }
+    
+    .control-btn {
+        width: 46px;
+        height: 46px;
+    }
+    
+    .speed-btn {
+        font-size: 0.7rem;
+        height: 34px;
+    }
+    
+    .loop-marker {
+        width: 12px;
+    }
+}
+
+/* 터치 피드백 */
+@media (hover: none) {
+    .file-item:active {
+        background: rgba(0, 229, 199, 0.15);
+    }
+    
+    .control-btn:active,
+    .speed-btn:active {
+        transform: scale(0.95);
+    }
+    
+    .loop-marker {
+        width: 14px;
+    }
+}
