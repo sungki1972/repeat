@@ -375,10 +375,10 @@ class AudioPlayer {
         }
         
         ctx.closePath();
-        ctx.fillStyle = '#2eec94';
+        ctx.fillStyle = '#faf0dc';  // 밝은 아이보리 (재생됨)
         ctx.fill();
         
-        // 2. 미재생 부분 (기본 청록색)
+        // 2. 미재생 부분 (어두운 아이보리)
         ctx.beginPath();
         ctx.moveTo(progressX, centerY);
         
@@ -399,14 +399,14 @@ class AudioPlayer {
         }
         
         ctx.closePath();
-        ctx.fillStyle = '#1abc9c';
+        ctx.fillStyle = '#d4c8a8';  // 기본 아이보리 (미재생)
         ctx.fill();
         
         // 중앙선
         ctx.beginPath();
         ctx.moveTo(0, centerY);
         ctx.lineTo(width, centerY);
-        ctx.strokeStyle = 'rgba(26, 188, 156, 0.25)';
+        ctx.strokeStyle = 'rgba(212, 200, 168, 0.3)';
         ctx.lineWidth = 1;
         ctx.stroke();
     }

@@ -18,12 +18,12 @@
     --text-secondary: #7fb8d8;
     --text-muted: #4a7a9a;
     
-    /* 웨이브폼 - 대비 강화 */
-    --waveform-bg: #0a2845;
-    --waveform-color: #1abc9c;
-    --waveform-played: #2eec94;
-    --loop-region: rgba(0, 229, 199, 0.15);
-    --loop-border: #00e5c7;
+    /* 웨이브폼 - 아이보리 */
+    --waveform-bg: #1a2a3a;
+    --waveform-color: #d4c8a8;
+    --waveform-played: #faf0dc;
+    --loop-region: rgba(250, 240, 220, 0.12);
+    --loop-border: #f5e6c8;
     
     /* 크기 */
     --radius: 12px;
