@@ -89,6 +89,19 @@ class RequestHandler(SimpleHTTPRequestHandler):
         if path == '/api/upload':
             self.handle_upload()
             return
+        elif path == '/api/delete':
+            self.handle_delete()
+            return
+
+        self.send_error(404)
+
+    def do_DELETE(self):
+        parsed = urlparse(self.path)
+        path = unquote(parsed.path)
+
+        if path == '/api/delete':
+            self.handle_delete()
+            return
 
         self.send_error(404)
 
@@ -238,6 +251,35 @@ class RequestHandler(SimpleHTTPRequestHandler):
 
         print(f"  Uploaded: {pin}/{filename} ({save_path.stat().st_size} bytes)")
         self.send_json({'success': True, 'message': f'{filename} 업로드 완료'})
+
+    def handle_delete(self):
+        """파일 삭제 처리"""
+        content_length = int(self.headers.get('Content-Length', 0))
+        body = self.rfile.read(content_length) if content_length > 0 else b'{}'
+        try:
+            data = json.loads(body)
+        except json.JSONDecodeError:
+            self.send_json({'success': False, 'error': 'Invalid JSON'}, 400)
+            return
+
+        pin = data.get('pin', '').strip()
+        filename = data.get('filename', '').strip()
+
+        if not pin or not filename:
+            self.send_json({'success': False, 'error': 'PIN과 파일명이 필요합니다'}, 400)
+            return
+
+        # 경로 탈출 방지
+        safe_name = Path(filename).name
+        file_path = AUDIO_CACHE_DIR / pin / safe_name
+
+        if not file_path.exists():
+            self.send_json({'success': False, 'error': '파일을 찾을 수 없습니다'}, 404)
+            return
+
+        file_path.unlink()
+        print(f"  Deleted: {pin}/{safe_name}")
+        self.send_json({'success': True, 'message': f'{safe_name} 삭제 완료'})
 
     def send_json(self, data, status=200):
         content = json.dumps(data, ensure_ascii=False).encode('utf-8')

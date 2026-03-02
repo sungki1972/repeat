@@ -338,6 +338,33 @@ kbd {
     flex-shrink: 0;
 }
 
+.fi-del {
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: transparent;
+    color: var(--t3);
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-left: 4px;
+    transition: all 0.15s;
+    opacity: 0;
+}
+
+.file-item:hover .fi-del,
+.file-item:active .fi-del {
+    opacity: 1;
+}
+
+.fi-del:hover {
+    background: rgba(255, 80, 80, 0.15);
+    color: #ff6666;
+}
+
 .empty-msg {
     padding: 28px 16px;
     text-align: center;
@@ -680,4 +707,5 @@ kbd {
     .file-item:active { background: rgba(0, 229, 199, 0.12); }
     .ctrl-btn:active, .speed-btn:active { transform: scale(0.93); }
     .loop-marker { width: 12px; }
+    .fi-del { opacity: 0.6; }
 }

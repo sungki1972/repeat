@@ -383,14 +383,29 @@ class AudioPlayer {
             <div class="file-item" data-name="${f.name}">
                 <span class="fi-name">${this.fmtName(f.name)}</span>
                 <span class="fi-size">${this.fmtSize(f.size)}</span>
+                <button class="fi-del" data-name="${f.name}" title="삭제">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                        <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+                    </svg>
+                </button>
             </div>
         `).join('');
 
         this.fileList.querySelectorAll('.file-item').forEach(item => {
-            item.addEventListener('click', () => {
+            // 파일 선택 (삭제 버튼 제외)
+            item.addEventListener('click', (e) => {
+                if (e.target.closest('.fi-del')) return;
                 this.loadTrack(item.dataset.name);
                 this.fileList.querySelectorAll('.file-item').forEach(i => i.classList.remove('active'));
                 item.classList.add('active');
+            });
+        });
+
+        // 삭제 버튼
+        this.fileList.querySelectorAll('.fi-del').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.deleteFile(btn.dataset.name);
             });
         });
     }
@@ -422,6 +437,34 @@ class AudioPlayer {
         if (ok > 0) {
             showToast(`${ok}개 파일 업로드 완료`);
             await this.loadFiles();
+        }
+    }
+
+    async deleteFile(filename) {
+        if (!confirm(`"${this.fmtName(filename)}" 을(를) 삭제할까요?`)) return;
+
+        try {
+            const res = await fetch('/api/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pin: this.pin, filename })
+            });
+            const r = await res.json();
+            if (r.success) {
+                // 현재 재생 중인 파일이면 정지
+                if (this.currentFile === filename) {
+                    this.audio.pause();
+                    this.audio.src = '';
+                    this.currentFile = null;
+                    this.playerSection.style.display = 'none';
+                }
+                showToast(r.message);
+                await this.loadFiles();
+            } else {
+                showToast(r.error, 3000);
+            }
+        } catch (err) {
+            showToast('삭제 실패', 3000);
         }
     }
 
