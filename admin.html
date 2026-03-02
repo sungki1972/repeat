@@ -517,7 +517,7 @@
                 if (data.success) {
                     token = data.token;
                     loginSection.style.display = 'none';
-                    adminSection.style.display = '';
+                    adminSection.style.display = 'block';
                     loadPins();
                 } else {
                     loginError.textContent = data.error || '로그인 실패';
@@ -673,7 +673,7 @@
         function logout() {
             token = '';
             adminSection.style.display = 'none';
-            loginSection.style.display = '';
+            loginSection.style.display = 'flex';
             passwordInput.value = '';
             loginError.textContent = '';
             passwordInput.focus();
