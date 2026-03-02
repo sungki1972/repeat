@@ -218,7 +218,9 @@
         .pin-info {
             display: flex;
             align-items: center;
-            gap: 14px;
+            gap: 12px;
+            flex: 1;
+            min-width: 0;
         }
 
         .pin-code {
@@ -226,14 +228,46 @@
             font-size: 1.15rem;
             font-weight: 600;
             letter-spacing: 3px;
+            flex-shrink: 0;
+        }
+
+        .pin-memo {
+            flex: 1;
+            min-width: 0;
+            padding: 4px 10px;
+            background: transparent;
+            border: 1px solid transparent;
+            border-radius: 6px;
+            color: var(--text);
+            font-size: 0.85rem;
+            font-family: 'Noto Sans KR', sans-serif;
+            outline: none;
+            transition: all 0.2s;
+        }
+
+        .pin-memo::placeholder {
+            color: var(--text-dim);
+            opacity: 0.5;
+        }
+
+        .pin-memo:hover {
+            border-color: var(--border);
+            background: var(--surface2);
+        }
+
+        .pin-memo:focus {
+            border-color: var(--accent);
+            background: var(--surface2);
         }
 
         .pin-files {
-            font-size: 0.8rem;
+            font-size: 0.75rem;
             color: var(--text-dim);
             background: var(--surface2);
-            padding: 3px 10px;
+            padding: 2px 8px;
             border-radius: 20px;
+            flex-shrink: 0;
+            white-space: nowrap;
         }
 
         .pin-del-btn {
@@ -552,19 +586,33 @@
                 }
 
                 pinCount.textContent = '총 ' + data.length + '개';
-                pinList.innerHTML = data.map(item => `
+                pinList.innerHTML = data.map(item => {
+                    const escapedMemo = (item.memo || '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+                    return `
                     <div class="pin-item">
                         <div class="pin-info">
                             <span class="pin-code">${item.pin}</span>
-                            <span class="pin-files">${item.fileCount}개 파일</span>
+                            <input class="pin-memo" data-pin="${item.pin}" value="${escapedMemo}" placeholder="이름/메모">
+                            <span class="pin-files">${item.fileCount}개</span>
                         </div>
                         <button class="pin-del-btn" data-pin="${item.pin}" title="삭제">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
                                 <path d="M3 6h18M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2m2 0v14a2 2 0 01-2 2H8a2 2 0 01-2-2V6h12z"/>
                             </svg>
                         </button>
-                    </div>
-                `).join('');
+                    </div>`;
+                }).join('');
+
+                // 메모 인라인 저장 (blur 또는 Enter)
+                pinList.querySelectorAll('.pin-memo').forEach(input => {
+                    const origVal = input.value;
+                    input.addEventListener('blur', () => {
+                        if (input.value !== origVal) saveMemo(input.dataset.pin, input.value);
+                    });
+                    input.addEventListener('keydown', e => {
+                        if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+                    });
+                });
 
                 // 삭제 버튼 이벤트
                 pinList.querySelectorAll('.pin-del-btn').forEach(btn => {
@@ -572,6 +620,24 @@
                 });
             } catch (e) {
                 pinList.innerHTML = '<div class="empty-msg">목록 로딩 실패</div>';
+            }
+        }
+
+        // ===== 메모 저장 =====
+        async function saveMemo(pin, memo) {
+            try {
+                const { data } = await api('/api/admin/memo', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pin, memo })
+                });
+                if (data.success) {
+                    showToast('저장됨', 'success');
+                } else {
+                    showToast(data.error || '저장 실패', 'error');
+                }
+            } catch (e) {
+                showToast('저장 실패', 'error');
             }
         }
 

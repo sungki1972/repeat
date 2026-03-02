@@ -45,6 +45,25 @@ mimetypes.add_type('audio/mpeg', '.mp3')
 # 최대 업로드 크기 50MB
 MAX_UPLOAD_SIZE = 50 * 1024 * 1024
 
+# PIN 메타데이터 파일 (이름/메모)
+PIN_META_FILE = AUDIO_CACHE_DIR / 'pins_meta.json'
+
+
+def load_pin_meta():
+    """PIN 메타데이터 로드"""
+    if PIN_META_FILE.exists():
+        try:
+            return json.loads(PIN_META_FILE.read_text('utf-8'))
+        except (json.JSONDecodeError, IOError):
+            pass
+    return {}
+
+
+def save_pin_meta(meta):
+    """PIN 메타데이터 저장"""
+    AUDIO_CACHE_DIR.mkdir(exist_ok=True)
+    PIN_META_FILE.write_text(json.dumps(meta, ensure_ascii=False, indent=2), 'utf-8')
+
 
 def verify_admin_token(token):
     """Admin 토큰 검증"""
@@ -133,6 +152,9 @@ class RequestHandler(SimpleHTTPRequestHandler):
         elif path == '/api/admin/delete-pin':
             self.handle_admin_delete_pin()
             return
+        elif path == '/api/admin/memo':
+            self.handle_admin_update_memo()
+            return
 
         self.send_error(404)
 
@@ -184,13 +206,15 @@ class RequestHandler(SimpleHTTPRequestHandler):
             return
 
         AUDIO_CACHE_DIR.mkdir(exist_ok=True)
+        meta = load_pin_meta()
         pins = []
         for d in sorted(AUDIO_CACHE_DIR.iterdir()):
             if d.is_dir():
                 file_count = sum(1 for f in d.iterdir() if f.suffix.lower() in ['.m4a', '.mp3'])
                 pins.append({
                     'pin': d.name,
-                    'fileCount': file_count
+                    'fileCount': file_count,
+                    'memo': meta.get(d.name, '')
                 })
         self.send_json(pins)
 
@@ -241,8 +265,44 @@ class RequestHandler(SimpleHTTPRequestHandler):
             return
 
         shutil.rmtree(pin_dir)
+        # 메타데이터에서도 삭제
+        meta = load_pin_meta()
+        if pin in meta:
+            del meta[pin]
+            save_pin_meta(meta)
         print(f"  Admin: Deleted PIN folder {pin}")
         self.send_json({'success': True, 'message': f'{pin} 삭제 완료'})
+
+    def handle_admin_update_memo(self):
+        """PIN 메모 수정"""
+        token = self.headers.get('Authorization', '')
+        if not verify_admin_token(token):
+            self.send_json({'error': '인증이 필요합니다'}, 401)
+            return
+
+        data = self.read_json_body()
+        if data is None:
+            return
+
+        pin = data.get('pin', '').strip()
+        memo = data.get('memo', '').strip()
+
+        if not pin:
+            self.send_json({'success': False, 'error': 'PIN이 필요합니다'}, 400)
+            return
+
+        pin_dir = AUDIO_CACHE_DIR / Path(pin).name
+        if not pin_dir.exists():
+            self.send_json({'success': False, 'error': '존재하지 않는 PIN입니다'}, 404)
+            return
+
+        meta = load_pin_meta()
+        if memo:
+            meta[pin] = memo
+        elif pin in meta:
+            del meta[pin]
+        save_pin_meta(meta)
+        self.send_json({'success': True})
 
     # ===== 학생 API =====
 
