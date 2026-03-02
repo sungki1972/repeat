@@ -22,61 +22,106 @@ class App {
     initLogin() {
         this.loginSection = document.getElementById('loginSection');
         this.mainSection = document.getElementById('mainSection');
-        this.pinBoxes = document.querySelectorAll('.pin-box');
+        this.pinInputs = document.querySelectorAll('.pin-input');
         this.pinError = document.getElementById('pinError');
         this.loginCard = document.getElementById('loginCard');
-        this.pinValue = '';
+        this.checking = false;
 
-        document.querySelectorAll('.pin-key').forEach(btn => {
-            btn.addEventListener('click', () => this.onPinKey(btn.dataset.key));
-        });
+        this.pinInputs.forEach((input, idx) => {
+            // 숫자 입력 처리
+            input.addEventListener('input', (e) => {
+                const val = e.target.value.replace(/[^0-9]/g, '');
+                if (val.length === 0) {
+                    e.target.value = '';
+                    return;
+                }
+                // 한 자리만 허용, ● 마스킹
+                e.target.value = val.charAt(0);
+                e.target.classList.add('filled');
+                this.pinError.textContent = '';
 
-        document.addEventListener('keydown', (e) => {
-            if (this.currentPin) return;
-            if (e.key >= '0' && e.key <= '9') {
-                this.onPinKey(e.key);
-            } else if (e.key === 'Backspace') {
+                // 다음 칸으로 자동 이동
+                if (idx < 3) {
+                    this.pinInputs[idx + 1].focus();
+                } else {
+                    // 4자리 모두 입력 완료
+                    e.target.blur();
+                    this.trySubmit();
+                }
+            });
+
+            // 키 다운 처리
+            input.addEventListener('keydown', (e) => {
+                // 백스페이스: 현재 칸 비우거나 이전 칸으로
+                if (e.key === 'Backspace') {
+                    if (input.value === '' && idx > 0) {
+                        e.preventDefault();
+                        this.pinInputs[idx - 1].value = '';
+                        this.pinInputs[idx - 1].classList.remove('filled');
+                        this.pinInputs[idx - 1].focus();
+                    } else {
+                        input.classList.remove('filled');
+                    }
+                    this.pinError.textContent = '';
+                    return;
+                }
+                // 왼쪽 화살표
+                if (e.key === 'ArrowLeft' && idx > 0) {
+                    e.preventDefault();
+                    this.pinInputs[idx - 1].focus();
+                    return;
+                }
+                // 오른쪽 화살표
+                if (e.key === 'ArrowRight' && idx < 3) {
+                    e.preventDefault();
+                    this.pinInputs[idx + 1].focus();
+                    return;
+                }
+                // 숫자가 아닌 키 차단 (제어키 제외)
+                if (e.key.length === 1 && !/[0-9]/.test(e.key)) {
+                    e.preventDefault();
+                }
+            });
+
+            // 포커스 시 전체 선택
+            input.addEventListener('focus', () => {
+                input.select();
+            });
+
+            // 붙여넣기 처리 (4자리 한번에)
+            input.addEventListener('paste', (e) => {
                 e.preventDefault();
-                this.onPinKey('back');
-            } else if (e.key === 'Escape') {
-                this.onPinKey('clear');
-            }
+                const paste = (e.clipboardData || window.clipboardData).getData('text').replace(/[^0-9]/g, '');
+                if (paste.length >= 4) {
+                    this.pinInputs.forEach((inp, i) => {
+                        inp.value = paste.charAt(i) || '';
+                        inp.classList.toggle('filled', inp.value !== '');
+                    });
+                    this.pinInputs[3].focus();
+                    this.trySubmit();
+                }
+            });
         });
+
+        // 첫 번째 입력 필드에 자동 포커스
+        setTimeout(() => this.pinInputs[0].focus(), 300);
     }
 
-    onPinKey(key) {
-        if (key === 'clear') {
-            this.pinValue = '';
-        } else if (key === 'back') {
-            this.pinValue = this.pinValue.slice(0, -1);
-        } else {
-            if (this.pinValue.length >= 4) return;
-            this.pinValue += key;
-        }
-
-        this.pinError.textContent = '';
-        this.updatePinBoxes();
-
-        if (this.pinValue.length === 4) {
-            this.checkPin(this.pinValue);
-        }
+    getPin() {
+        return Array.from(this.pinInputs).map(i => i.value).join('');
     }
 
-    updatePinBoxes() {
-        this.pinBoxes.forEach((box, i) => {
-            if (i < this.pinValue.length) {
-                box.textContent = '●';
-                box.classList.add('filled');
-            } else {
-                box.textContent = '';
-                box.classList.remove('filled');
-            }
-        });
+    trySubmit() {
+        const pin = this.getPin();
+        if (pin.length === 4 && /^[0-9]{4}$/.test(pin)) {
+            this.checkPin(pin);
+        }
     }
 
     async checkPin(pin) {
-        // 버튼 비활성화 (중복 요청 방지)
-        document.querySelectorAll('.pin-key').forEach(b => b.disabled = true);
+        if (this.checking) return;
+        this.checking = true;
+        this.pinInputs.forEach(i => i.disabled = true);
 
         try {
             const res = await fetch(`/api/check-pin?pin=${pin}`);
@@ -84,24 +129,31 @@ class App {
 
             if (data.valid) {
                 this.currentPin = pin;
-                // 성공 애니메이션 후 전환
-                this.pinBoxes.forEach(b => b.classList.add('success'));
+                this.pinInputs.forEach(i => i.classList.add('success'));
                 setTimeout(() => this.showMain(), 400);
             } else {
                 this.pinError.textContent = data.error || '잘못된 번호입니다';
                 this.loginCard.classList.add('shake');
                 setTimeout(() => {
                     this.loginCard.classList.remove('shake');
-                    this.pinValue = '';
-                    this.updatePinBoxes();
+                    this.pinInputs.forEach(i => {
+                        i.value = '';
+                        i.classList.remove('filled');
+                        i.disabled = false;
+                    });
+                    this.checking = false;
+                    this.pinInputs[0].focus();
                 }, 500);
             }
         } catch (err) {
             this.pinError.textContent = '서버 연결 실패';
-            this.pinValue = '';
-            this.updatePinBoxes();
-        } finally {
-            document.querySelectorAll('.pin-key').forEach(b => b.disabled = false);
+            this.pinInputs.forEach(i => {
+                i.value = '';
+                i.classList.remove('filled');
+                i.disabled = false;
+            });
+            this.checking = false;
+            this.pinInputs[0].focus();
         }
     }
 

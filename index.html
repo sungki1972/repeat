@@ -21,34 +21,13 @@
                 <h1 class="login-title">Violin Practice</h1>
                 <p class="login-subtitle">휴대폰 번호 뒷자리 4자리를 입력하세요</p>
 
-                <div class="pin-input-area">
-                    <div class="pin-boxes">
-                        <div class="pin-box" data-index="0"></div>
-                        <div class="pin-box" data-index="1"></div>
-                        <div class="pin-box" data-index="2"></div>
-                        <div class="pin-box" data-index="3"></div>
-                    </div>
-                    <div id="pinError" class="pin-error"></div>
+                <div class="pin-fields">
+                    <input class="pin-input" type="tel" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off" data-index="0">
+                    <input class="pin-input" type="tel" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off" data-index="1">
+                    <input class="pin-input" type="tel" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off" data-index="2">
+                    <input class="pin-input" type="tel" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off" data-index="3">
                 </div>
-
-                <div class="pin-pad">
-                    <button class="pin-key" data-key="1">1</button>
-                    <button class="pin-key" data-key="2">2</button>
-                    <button class="pin-key" data-key="3">3</button>
-                    <button class="pin-key" data-key="4">4</button>
-                    <button class="pin-key" data-key="5">5</button>
-                    <button class="pin-key" data-key="6">6</button>
-                    <button class="pin-key" data-key="7">7</button>
-                    <button class="pin-key" data-key="8">8</button>
-                    <button class="pin-key" data-key="9">9</button>
-                    <button class="pin-key pin-key-func" data-key="clear">C</button>
-                    <button class="pin-key" data-key="0">0</button>
-                    <button class="pin-key pin-key-func" data-key="back">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
-                            <path d="M19 12H5M12 19l-7-7 7-7"/>
-                        </svg>
-                    </button>
-                </div>
+                <div id="pinError" class="pin-error"></div>
             </div>
         </section>
 

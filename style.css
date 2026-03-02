@@ -78,49 +78,72 @@ body {
     margin-bottom: 32px;
 }
 
-/* PIN 박스 */
-.pin-input-area {
-    margin-bottom: 24px;
-}
-
-.pin-boxes {
+/* PIN 입력 필드 */
+.pin-fields {
     display: flex;
     justify-content: center;
     gap: 14px;
-    margin-bottom: 10px;
+    margin-bottom: 12px;
 }
 
-.pin-box {
-    width: 48px;
-    height: 54px;
+.pin-input {
+    width: 52px;
+    height: 60px;
     border: 2px solid rgba(0, 229, 199, 0.25);
-    border-radius: 10px;
+    border-radius: 12px;
     background: rgba(0, 20, 40, 0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.4rem;
-    color: var(--pri);
+    color: transparent;
+    text-shadow: 0 0 0 var(--pri);
+    font-size: 1.6rem;
+    font-weight: 700;
+    text-align: center;
+    caret-color: var(--pri);
+    outline: none;
     transition: all 0.2s ease;
+    -webkit-text-security: disc;
+    font-family: 'JetBrains Mono', monospace;
 }
 
-.pin-box.filled {
+.pin-input::placeholder {
+    color: rgba(0, 229, 199, 0.15);
+}
+
+.pin-input:focus {
+    border-color: var(--pri);
+    background: rgba(0, 229, 199, 0.06);
+    box-shadow: 0 0 16px rgba(0, 229, 199, 0.25);
+    transform: scale(1.05);
+}
+
+.pin-input.filled {
     border-color: var(--pri);
     background: rgba(0, 229, 199, 0.08);
     box-shadow: 0 0 12px rgba(0, 229, 199, 0.2);
 }
 
-.pin-box.success {
+.pin-input.success {
     border-color: var(--pri);
     background: var(--pri);
-    color: #0a1929;
-    transform: scale(1.05);
+    color: transparent;
+    text-shadow: 0 0 0 #0a1929;
+    transform: scale(1.06);
+    box-shadow: 0 0 20px rgba(0, 229, 199, 0.5);
+}
+
+.pin-input:disabled {
+    opacity: 0.7;
+}
+
+/* 모바일에서 포커스 시 확대 방지 */
+@supports (-webkit-touch-callout: none) {
+    .pin-input { font-size: 16px; }
 }
 
 .pin-error {
-    height: 22px;
+    height: 24px;
     font-size: 0.78rem;
     color: #ff7777;
+    margin-top: 2px;
 }
 
 @keyframes shake {
@@ -131,41 +154,6 @@ body {
     80% { transform: translateX(5px); }
 }
 .shake { animation: shake 0.4s ease; }
-
-/* PIN 패드 */
-.pin-pad {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 10px;
-    max-width: 260px;
-    margin: 0 auto;
-}
-
-.pin-key {
-    height: 54px;
-    border: 1px solid rgba(0, 229, 199, 0.15);
-    background: rgba(0, 229, 199, 0.04);
-    border-radius: var(--rs);
-    color: var(--t1);
-    font-size: 1.3rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.12s ease;
-    user-select: none;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.pin-key:hover { background: rgba(0, 229, 199, 0.12); border-color: var(--pri); }
-.pin-key:active { transform: scale(0.93); background: rgba(0, 229, 199, 0.2); }
-.pin-key:disabled { opacity: 0.4; pointer-events: none; }
-
-.pin-key-func {
-    color: var(--t2);
-    font-size: 1rem;
-    font-weight: 600;
-}
 
 /* ========================================
    메인 앱
@@ -677,8 +665,7 @@ kbd {
     .play-btn { width: 58px; height: 58px; }
     .ctrl-btn { width: 42px; height: 42px; }
     .login-card { padding: 36px 24px 30px; }
-    .pin-box { width: 44px; height: 50px; }
-    .pin-key { height: 50px; font-size: 1.2rem; }
+    .pin-input { width: 46px; height: 54px; font-size: 1.4rem; }
     .help-content { font-size: 0.68rem; }
 }
 
