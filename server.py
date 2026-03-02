@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Violin Practice - 구간 반복 연습 플레이어 서버
-PIN 폴더 기반 인증 + FTP 동기화 + 파일 업로드
+PIN 폴더 기반 인증 + FTP 동기화 + 파일 업로드 + Admin 관리
 """
 
 import os
@@ -9,6 +9,9 @@ import json
 import mimetypes
 import cgi
 import io
+import secrets
+import time
+import shutil
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from ftplib import FTP
 from pathlib import Path
@@ -19,6 +22,12 @@ from datetime import datetime
 PORT = int(os.environ.get('PORT', 8080))
 AUDIO_CACHE_DIR = Path(__file__).parent / 'audio_cache'
 STATIC_DIR = Path(__file__).parent
+
+# Admin 비밀번호 (환경변수 또는 기본값)
+ADMIN_PASS = os.environ.get('ADMIN_PASS', 'violin2024')
+
+# Admin 세션 토큰 저장 (메모리)
+admin_tokens = {}  # token -> expire_time
 
 # FTP 설정
 FTP_CONFIG = {
@@ -37,8 +46,21 @@ mimetypes.add_type('audio/mpeg', '.mp3')
 MAX_UPLOAD_SIZE = 50 * 1024 * 1024
 
 
+def verify_admin_token(token):
+    """Admin 토큰 검증"""
+    if not token:
+        return False
+    token = token.replace('Bearer ', '')
+    if token in admin_tokens:
+        if time.time() < admin_tokens[token]:
+            return True
+        else:
+            del admin_tokens[token]
+    return False
+
+
 class RequestHandler(SimpleHTTPRequestHandler):
-    """PIN 기반 인증 + Range 요청 지원 HTTP 핸들러"""
+    """PIN 기반 인증 + Range 요청 + Admin API 핸들러"""
 
     CHUNK_SIZE = 1024 * 1024  # 1MB
 
@@ -47,8 +69,8 @@ class RequestHandler(SimpleHTTPRequestHandler):
 
     def end_headers(self):
         self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Range, Content-Type')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Range, Content-Type, Authorization')
         self.send_header('Accept-Ranges', 'bytes')
         super().end_headers()
 
@@ -61,7 +83,17 @@ class RequestHandler(SimpleHTTPRequestHandler):
         path = unquote(parsed.path)
         params = parse_qs(parsed.query)
 
-        # API 엔드포인트
+        # Admin 페이지
+        if path == '/admin' or path == '/admin/':
+            self.serve_file(STATIC_DIR / 'admin.html')
+            return
+
+        # Admin API
+        if path == '/api/admin/pins':
+            self.handle_admin_list_pins()
+            return
+
+        # 학생 API
         if path == '/api/check-pin':
             self.handle_check_pin(params)
             return
@@ -92,6 +124,15 @@ class RequestHandler(SimpleHTTPRequestHandler):
         elif path == '/api/delete':
             self.handle_delete()
             return
+        elif path == '/api/admin/login':
+            self.handle_admin_login()
+            return
+        elif path == '/api/admin/pins':
+            self.handle_admin_create_pin()
+            return
+        elif path == '/api/admin/delete-pin':
+            self.handle_admin_delete_pin()
+            return
 
         self.send_error(404)
 
@@ -105,13 +146,111 @@ class RequestHandler(SimpleHTTPRequestHandler):
 
         self.send_error(404)
 
+    def serve_file(self, filepath):
+        """파일 직접 서빙"""
+        if not filepath.exists():
+            self.send_error(404)
+            return
+        content = filepath.read_bytes()
+        mime = mimetypes.guess_type(str(filepath))[0] or 'text/html'
+        self.send_response(200)
+        self.send_header('Content-Type', f'{mime}; charset=utf-8')
+        self.send_header('Content-Length', len(content))
+        self.end_headers()
+        self.wfile.write(content)
+
+    # ===== Admin API =====
+
+    def handle_admin_login(self):
+        """Admin 로그인"""
+        data = self.read_json_body()
+        if data is None:
+            return
+
+        password = data.get('password', '')
+        if password == ADMIN_PASS:
+            token = secrets.token_hex(32)
+            admin_tokens[token] = time.time() + 3600 * 4  # 4시간 유효
+            self.send_json({'success': True, 'token': token})
+        else:
+            time.sleep(1)  # brute force 방지
+            self.send_json({'success': False, 'error': '비밀번호가 틀렸습니다'}, 401)
+
+    def handle_admin_list_pins(self):
+        """PIN 목록 조회"""
+        token = self.headers.get('Authorization', '')
+        if not verify_admin_token(token):
+            self.send_json({'error': '인증이 필요합니다'}, 401)
+            return
+
+        AUDIO_CACHE_DIR.mkdir(exist_ok=True)
+        pins = []
+        for d in sorted(AUDIO_CACHE_DIR.iterdir()):
+            if d.is_dir():
+                file_count = sum(1 for f in d.iterdir() if f.suffix.lower() in ['.m4a', '.mp3'])
+                pins.append({
+                    'pin': d.name,
+                    'fileCount': file_count
+                })
+        self.send_json(pins)
+
+    def handle_admin_create_pin(self):
+        """PIN 폴더 생성"""
+        token = self.headers.get('Authorization', '')
+        if not verify_admin_token(token):
+            self.send_json({'error': '인증이 필요합니다'}, 401)
+            return
+
+        data = self.read_json_body()
+        if data is None:
+            return
+
+        pin = data.get('pin', '').strip()
+        if not pin or len(pin) != 4 or not pin.isdigit():
+            self.send_json({'success': False, 'error': '4자리 숫자를 입력하세요'}, 400)
+            return
+
+        pin_dir = AUDIO_CACHE_DIR / pin
+        if pin_dir.exists():
+            self.send_json({'success': False, 'error': f'{pin} 은(는) 이미 존재합니다'}, 400)
+            return
+
+        pin_dir.mkdir(parents=True, exist_ok=True)
+        print(f"  Admin: Created PIN folder {pin}")
+        self.send_json({'success': True, 'message': f'{pin} 생성 완료'})
+
+    def handle_admin_delete_pin(self):
+        """PIN 폴더 삭제 (내부 파일 포함)"""
+        token = self.headers.get('Authorization', '')
+        if not verify_admin_token(token):
+            self.send_json({'error': '인증이 필요합니다'}, 401)
+            return
+
+        data = self.read_json_body()
+        if data is None:
+            return
+
+        pin = data.get('pin', '').strip()
+        if not pin:
+            self.send_json({'success': False, 'error': 'PIN이 필요합니다'}, 400)
+            return
+
+        pin_dir = AUDIO_CACHE_DIR / Path(pin).name  # 경로 탈출 방지
+        if not pin_dir.exists() or not pin_dir.is_dir():
+            self.send_json({'success': False, 'error': '존재하지 않는 PIN입니다'}, 404)
+            return
+
+        shutil.rmtree(pin_dir)
+        print(f"  Admin: Deleted PIN folder {pin}")
+        self.send_json({'success': True, 'message': f'{pin} 삭제 완료'})
+
+    # ===== 학생 API =====
+
     def handle_check_pin(self, params):
-        """PIN(폴더) 존재 여부 확인"""
         pin = params.get('pin', [''])[0].strip()
         if not pin:
             self.send_json({'valid': False, 'error': '코드를 입력하세요'})
             return
-
         pin_dir = AUDIO_CACHE_DIR / pin
         if pin_dir.is_dir():
             self.send_json({'valid': True})
@@ -119,17 +258,14 @@ class RequestHandler(SimpleHTTPRequestHandler):
             self.send_json({'valid': False, 'error': '잘못된 코드입니다'})
 
     def handle_file_list(self, params):
-        """특정 PIN 폴더의 오디오 파일 목록"""
         pin = params.get('pin', [''])[0].strip()
         if not pin:
             self.send_json([])
             return
-
         pin_dir = AUDIO_CACHE_DIR / pin
         if not pin_dir.is_dir():
             self.send_json([])
             return
-
         files = []
         for f in pin_dir.iterdir():
             if f.suffix.lower() in ['.m4a', '.mp3']:
@@ -139,12 +275,10 @@ class RequestHandler(SimpleHTTPRequestHandler):
                     'size': stat.st_size,
                     'modified': datetime.fromtimestamp(stat.st_mtime).isoformat()
                 })
-
         files.sort(key=lambda x: x['name'])
         self.send_json(files)
 
     def handle_sync(self, params):
-        """FTP 동기화 (특정 PIN 또는 전체)"""
         pin = params.get('pin', [''])[0].strip()
         try:
             result = sync_ftp(pin if pin else None)
@@ -153,18 +287,13 @@ class RequestHandler(SimpleHTTPRequestHandler):
             self.send_json({'success': False, 'error': str(e)}, 500)
 
     def handle_audio_request(self, pin, filename):
-        """오디오 파일 (Range 지원)"""
         file_path = AUDIO_CACHE_DIR / pin / unquote(filename)
-
         if not file_path.exists():
             self.send_error(404, 'File not found')
             return
-
         file_size = file_path.stat().st_size
         mime_type = mimetypes.guess_type(str(file_path))[0] or 'application/octet-stream'
-
         range_header = self.headers.get('Range')
-
         if range_header:
             try:
                 range_spec = range_header.replace('bytes=', '')
@@ -172,20 +301,16 @@ class RequestHandler(SimpleHTTPRequestHandler):
                 start = int(start_str) if start_str else 0
                 end = int(end_str) if end_str else min(start + self.CHUNK_SIZE - 1, file_size - 1)
                 end = min(end, file_size - 1)
-
                 content_length = end - start + 1
-
                 self.send_response(206)
                 self.send_header('Content-Type', mime_type)
                 self.send_header('Content-Length', content_length)
                 self.send_header('Content-Range', f'bytes {start}-{end}/{file_size}')
                 self.send_header('Cache-Control', 'public, max-age=86400')
                 self.end_headers()
-
                 with open(file_path, 'rb') as f:
                     f.seek(start)
                     self.wfile.write(f.read(content_length))
-
             except (ValueError, IOError):
                 self.send_error(416, 'Range Not Satisfiable')
         else:
@@ -194,24 +319,19 @@ class RequestHandler(SimpleHTTPRequestHandler):
             self.send_header('Content-Length', file_size)
             self.send_header('Cache-Control', 'public, max-age=86400')
             self.end_headers()
-
             with open(file_path, 'rb') as f:
                 while chunk := f.read(self.CHUNK_SIZE):
                     self.wfile.write(chunk)
 
     def handle_upload(self):
-        """파일 업로드 처리"""
         content_type = self.headers.get('Content-Type', '')
         if 'multipart/form-data' not in content_type:
             self.send_json({'success': False, 'error': 'Invalid content type'}, 400)
             return
-
         content_length = int(self.headers.get('Content-Length', 0))
         if content_length > MAX_UPLOAD_SIZE:
             self.send_json({'success': False, 'error': '파일이 너무 큽니다 (최대 50MB)'}, 413)
             return
-
-        # multipart 파싱
         boundary = content_type.split('boundary=')[1].strip()
         environ = {
             'REQUEST_METHOD': 'POST',
@@ -219,67 +339,57 @@ class RequestHandler(SimpleHTTPRequestHandler):
             'CONTENT_LENGTH': str(content_length),
         }
         body = self.rfile.read(content_length)
-        fs = cgi.FieldStorage(
-            fp=io.BytesIO(body),
-            environ=environ,
-            keep_blank_values=True
-        )
-
+        fs = cgi.FieldStorage(fp=io.BytesIO(body), environ=environ, keep_blank_values=True)
         pin = fs.getvalue('pin', '').strip()
         if not pin:
             self.send_json({'success': False, 'error': 'PIN이 필요합니다'}, 400)
             return
-
         pin_dir = AUDIO_CACHE_DIR / pin
         if not pin_dir.is_dir():
             self.send_json({'success': False, 'error': '잘못된 코드입니다'}, 400)
             return
-
         file_item = fs['file']
         if not file_item.filename:
             self.send_json({'success': False, 'error': '파일을 선택하세요'}, 400)
             return
-
         filename = Path(file_item.filename).name
         if not filename.lower().endswith(('.m4a', '.mp3')):
             self.send_json({'success': False, 'error': 'M4A 또는 MP3 파일만 가능합니다'}, 400)
             return
-
         save_path = pin_dir / filename
         with open(save_path, 'wb') as f:
             f.write(file_item.file.read())
-
         print(f"  Uploaded: {pin}/{filename} ({save_path.stat().st_size} bytes)")
         self.send_json({'success': True, 'message': f'{filename} 업로드 완료'})
 
     def handle_delete(self):
-        """파일 삭제 처리"""
-        content_length = int(self.headers.get('Content-Length', 0))
-        body = self.rfile.read(content_length) if content_length > 0 else b'{}'
-        try:
-            data = json.loads(body)
-        except json.JSONDecodeError:
-            self.send_json({'success': False, 'error': 'Invalid JSON'}, 400)
+        data = self.read_json_body()
+        if data is None:
             return
-
         pin = data.get('pin', '').strip()
         filename = data.get('filename', '').strip()
-
         if not pin or not filename:
             self.send_json({'success': False, 'error': 'PIN과 파일명이 필요합니다'}, 400)
             return
-
-        # 경로 탈출 방지
         safe_name = Path(filename).name
         file_path = AUDIO_CACHE_DIR / pin / safe_name
-
         if not file_path.exists():
             self.send_json({'success': False, 'error': '파일을 찾을 수 없습니다'}, 404)
             return
-
         file_path.unlink()
         print(f"  Deleted: {pin}/{safe_name}")
         self.send_json({'success': True, 'message': f'{safe_name} 삭제 완료'})
+
+    # ===== 유틸 =====
+
+    def read_json_body(self):
+        content_length = int(self.headers.get('Content-Length', 0))
+        body = self.rfile.read(content_length) if content_length > 0 else b'{}'
+        try:
+            return json.loads(body)
+        except json.JSONDecodeError:
+            self.send_json({'success': False, 'error': 'Invalid JSON'}, 400)
+            return None
 
     def send_json(self, data, status=200):
         content = json.dumps(data, ensure_ascii=False).encode('utf-8')
@@ -294,22 +404,16 @@ class RequestHandler(SimpleHTTPRequestHandler):
 
 
 def sync_ftp(target_pin=None):
-    """FTP에서 오디오 파일 재귀 동기화"""
     AUDIO_CACHE_DIR.mkdir(exist_ok=True)
-
     ftp = FTP()
     ftp.connect(FTP_CONFIG['host'], FTP_CONFIG['port'])
     ftp.login(FTP_CONFIG['user'], FTP_CONFIG['pass'])
     ftp.cwd(FTP_CONFIG['path'])
-
     total_downloaded = 0
     total_deleted = 0
-
-    # 원격 폴더(PIN) 목록 가져오기
     remote_dirs = []
     entries = []
     ftp.retrlines('LIST', entries.append)
-
     for line in entries:
         parts = line.split()
         if len(parts) >= 9 and line.startswith('d'):
@@ -317,22 +421,14 @@ def sync_ftp(target_pin=None):
             if dirname not in ('.', '..'):
                 if target_pin is None or dirname == target_pin:
                     remote_dirs.append(dirname)
-
-    # 각 폴더(PIN)별 동기화
     for pin_dir_name in remote_dirs:
         local_pin_dir = AUDIO_CACHE_DIR / pin_dir_name
         local_pin_dir.mkdir(exist_ok=True)
-
-        # 해당 폴더의 파일 목록
         remote_files = {}
         ftp.cwd(pin_dir_name)
         ftp.retrlines('LIST', lambda line, rf=remote_files: parse_ftp_list(line, rf))
-
-        # 로컬 파일 목록
         local_files = {f.name: f.stat().st_size for f in local_pin_dir.iterdir()
                        if f.suffix.lower() in ['.m4a', '.mp3']}
-
-        # 다운로드
         for name, size in remote_files.items():
             if name not in local_files or local_files[name] != size:
                 local_path = local_pin_dir / name
@@ -340,22 +436,17 @@ def sync_ftp(target_pin=None):
                     ftp.retrbinary(f'RETR {name}', f.write)
                 total_downloaded += 1
                 print(f"  Downloaded: {pin_dir_name}/{name}")
-
-        # 삭제 (원격에 없는 파일)
         for name in local_files:
             if name not in remote_files:
                 (local_pin_dir / name).unlink()
                 total_deleted += 1
                 print(f"  Deleted: {pin_dir_name}/{name}")
-
         ftp.cwd('..')
-
     ftp.quit()
     return f"{total_downloaded} downloaded, {total_deleted} deleted"
 
 
 def parse_ftp_list(line, result):
-    """FTP LIST 출력 파싱"""
     parts = line.split()
     if len(parts) >= 9:
         name = ' '.join(parts[8:])
@@ -369,22 +460,19 @@ def parse_ftp_list(line, result):
 
 def start_server():
     AUDIO_CACHE_DIR.mkdir(exist_ok=True)
-
     server = ThreadingHTTPServer(('0.0.0.0', PORT), RequestHandler)
     print(f"""
   Violin Practice Server
   http://localhost:{PORT}
+  Admin: http://localhost:{PORT}/admin
   Audio: {AUDIO_CACHE_DIR}
 """)
-
-    # 시작 시 FTP 동기화
     try:
         print("Syncing with FTP...")
         result = sync_ftp()
         print(f"Done: {result}\n")
     except Exception as e:
         print(f"FTP sync failed: {e}\n")
-
     server.serve_forever()
 
 

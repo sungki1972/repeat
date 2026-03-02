@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Violin Practice</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg: #0f1117;
+            --surface: #1a1d27;
+            --surface2: #242836;
+            --border: #2e3348;
+            --text: #e8eaf0;
+            --text-dim: #8b90a5;
+            --accent: #6c8cff;
+            --accent-dim: rgba(108,140,255,0.15);
+            --danger: #ff5c5c;
+            --danger-dim: rgba(255,92,92,0.15);
+            --success: #4ade80;
+            --success-dim: rgba(74,222,128,0.15);
+            --radius: 12px;
+        }
+
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 520px;
+            padding: 24px 16px;
+        }
+
+        /* ===== 로그인 화면 ===== */
+        .login-wrap {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 80vh;
+        }
+
+        .login-card {
+            width: 100%;
+            max-width: 360px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 40px 32px;
+            text-align: center;
+        }
+
+        .login-card h1 {
+            font-size: 1.3rem;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+
+        .login-card .sub {
+            font-size: 0.85rem;
+            color: var(--text-dim);
+            margin-bottom: 28px;
+        }
+
+        .login-input {
+            width: 100%;
+            padding: 12px 16px;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            font-size: 1rem;
+            font-family: 'JetBrains Mono', monospace;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .login-input:focus {
+            border-color: var(--accent);
+        }
+
+        .login-btn {
+            width: 100%;
+            margin-top: 14px;
+            padding: 12px;
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        .login-btn:hover { opacity: 0.85; }
+        .login-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .login-error {
+            margin-top: 12px;
+            font-size: 0.82rem;
+            color: var(--danger);
+            min-height: 1.2em;
+        }
+
+        /* ===== 관리 화면 ===== */
+        .admin-section { display: none; }
+
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 24px;
+        }
+
+        .header h1 {
+            font-size: 1.2rem;
+            font-weight: 700;
+        }
+
+        .header-right {
+            display: flex;
+            gap: 8px;
+        }
+
+        .header-btn {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            color: var(--text-dim);
+            padding: 6px 14px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .header-btn:hover {
+            color: var(--text);
+            border-color: var(--text-dim);
+        }
+
+        /* PIN 추가 영역 */
+        .add-section {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .add-input {
+            flex: 1;
+            padding: 10px 14px;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            font-size: 1rem;
+            font-family: 'JetBrains Mono', monospace;
+            outline: none;
+            letter-spacing: 4px;
+            text-align: center;
+            transition: border-color 0.2s;
+        }
+
+        .add-input:focus { border-color: var(--accent); }
+
+        .add-input::placeholder {
+            letter-spacing: 0;
+            color: var(--text-dim);
+            font-size: 0.85rem;
+        }
+
+        .add-btn {
+            padding: 10px 20px;
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: opacity 0.2s;
+        }
+
+        .add-btn:hover { opacity: 0.85; }
+
+        /* PIN 목록 */
+        .pin-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .pin-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 14px 18px;
+            transition: border-color 0.2s;
+        }
+
+        .pin-item:hover {
+            border-color: var(--text-dim);
+        }
+
+        .pin-info {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .pin-code {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.15rem;
+            font-weight: 600;
+            letter-spacing: 3px;
+        }
+
+        .pin-files {
+            font-size: 0.8rem;
+            color: var(--text-dim);
+            background: var(--surface2);
+            padding: 3px 10px;
+            border-radius: 20px;
+        }
+
+        .pin-del-btn {
+            background: var(--danger-dim);
+            border: 1px solid transparent;
+            color: var(--danger);
+            width: 34px;
+            height: 34px;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0.6;
+            transition: all 0.2s;
+        }
+
+        .pin-del-btn:hover {
+            opacity: 1;
+            border-color: var(--danger);
+        }
+
+        .empty-msg {
+            text-align: center;
+            color: var(--text-dim);
+            font-size: 0.9rem;
+            padding: 40px 0;
+        }
+
+        /* 총 PIN 수 */
+        .pin-count {
+            font-size: 0.82rem;
+            color: var(--text-dim);
+            margin-bottom: 12px;
+        }
+
+        /* 토스트 */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%) translateY(80px);
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 10px 22px;
+            border-radius: 10px;
+            font-size: 0.85rem;
+            opacity: 0;
+            transition: all 0.3s ease;
+            z-index: 1000;
+            pointer-events: none;
+        }
+
+        .toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        .toast.error {
+            border-color: var(--danger);
+            color: var(--danger);
+        }
+
+        .toast.success {
+            border-color: var(--success);
+            color: var(--success);
+        }
+
+        /* 삭제 확인 모달 */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.6);
+            z-index: 500;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 28px 24px;
+            max-width: 340px;
+            width: 90%;
+            text-align: center;
+        }
+
+        .modal h3 {
+            font-size: 1rem;
+            margin-bottom: 8px;
+        }
+
+        .modal p {
+            font-size: 0.85rem;
+            color: var(--text-dim);
+            margin-bottom: 18px;
+            line-height: 1.5;
+        }
+
+        .modal-pin {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: var(--danger);
+            letter-spacing: 4px;
+        }
+
+        .modal-confirm-input {
+            width: 140px;
+            padding: 8px 12px;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            font-size: 1rem;
+            font-family: 'JetBrains Mono', monospace;
+            letter-spacing: 4px;
+            text-align: center;
+            outline: none;
+            margin-bottom: 16px;
+        }
+
+        .modal-confirm-input:focus { border-color: var(--danger); }
+
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        .modal-btn {
+            padding: 10px 24px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            border: 1px solid var(--border);
+            transition: all 0.2s;
+        }
+
+        .modal-btn.cancel {
+            background: var(--surface2);
+            color: var(--text-dim);
+        }
+
+        .modal-btn.cancel:hover { color: var(--text); }
+
+        .modal-btn.danger {
+            background: var(--danger);
+            color: #fff;
+            border-color: var(--danger);
+        }
+
+        .modal-btn.danger:hover { opacity: 0.85; }
+        .modal-btn.danger:disabled { opacity: 0.4; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+    <div class="container">
+
+        <!-- 로그인 -->
+        <div id="loginSection" class="login-wrap">
+            <div class="login-card">
+                <h1>Admin</h1>
+                <p class="sub">관리자 비밀번호를 입력하세요</p>
+                <input type="password" id="passwordInput" class="login-input" placeholder="비밀번호" autocomplete="off">
+                <button id="loginBtn" class="login-btn">로그인</button>
+                <div id="loginError" class="login-error"></div>
+            </div>
+        </div>
+
+        <!-- 관리 -->
+        <div id="adminSection" class="admin-section">
+            <div class="header">
+                <h1>PIN 관리</h1>
+                <div class="header-right">
+                    <button id="refreshBtn" class="header-btn">새로고침</button>
+                    <button id="logoutBtn" class="header-btn">로그아웃</button>
+                </div>
+            </div>
+
+            <div class="add-section">
+                <input type="tel" id="addPinInput" class="add-input" maxlength="4" inputmode="numeric" placeholder="새 PIN (4자리)">
+                <button id="addPinBtn" class="add-btn">추가</button>
+            </div>
+
+            <div id="pinCount" class="pin-count"></div>
+            <div id="pinList" class="pin-list">
+                <div class="empty-msg">로딩 중...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 삭제 확인 모달 -->
+    <div id="deleteModal" class="modal-overlay">
+        <div class="modal">
+            <h3>PIN 삭제</h3>
+            <p>
+                <span id="deleteTargetPin" class="modal-pin"></span><br>
+                이 PIN의 모든 파일이 삭제됩니다.<br>
+                확인하려면 PIN을 다시 입력하세요.
+            </p>
+            <input type="tel" id="confirmPinInput" class="modal-confirm-input" maxlength="4" inputmode="numeric" placeholder="PIN 재입력">
+            <div class="modal-actions">
+                <button id="cancelDeleteBtn" class="modal-btn cancel">취소</button>
+                <button id="confirmDeleteBtn" class="modal-btn danger" disabled>삭제</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 토스트 -->
+    <div id="toast" class="toast"></div>
+
+    <script>
+    (function() {
+        'use strict';
+
+        let token = '';
+        let deletingPin = '';
+
+        // DOM
+        const $ = id => document.getElementById(id);
+        const loginSection = $('loginSection');
+        const adminSection = $('adminSection');
+        const passwordInput = $('passwordInput');
+        const loginBtn = $('loginBtn');
+        const loginError = $('loginError');
+        const addPinInput = $('addPinInput');
+        const addPinBtn = $('addPinBtn');
+        const pinList = $('pinList');
+        const pinCount = $('pinCount');
+        const deleteModal = $('deleteModal');
+        const deleteTargetPin = $('deleteTargetPin');
+        const confirmPinInput = $('confirmPinInput');
+        const confirmDeleteBtn = $('confirmDeleteBtn');
+        const cancelDeleteBtn = $('cancelDeleteBtn');
+        const toastEl = $('toast');
+
+        // 토스트
+        let toastTimer;
+        function showToast(msg, type = '') {
+            clearTimeout(toastTimer);
+            toastEl.textContent = msg;
+            toastEl.className = 'toast' + (type ? ' ' + type : '');
+            requestAnimationFrame(() => toastEl.classList.add('show'));
+            toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2500);
+        }
+
+        // API 호출
+        async function api(url, options = {}) {
+            if (token) {
+                options.headers = options.headers || {};
+                options.headers['Authorization'] = 'Bearer ' + token;
+            }
+            const res = await fetch(url, options);
+            return { status: res.status, data: await res.json() };
+        }
+
+        // ===== 로그인 =====
+        async function login() {
+            const pw = passwordInput.value.trim();
+            if (!pw) return;
+
+            loginBtn.disabled = true;
+            loginError.textContent = '';
+
+            try {
+                const { status, data } = await api('/api/admin/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password: pw })
+                });
+
+                if (data.success) {
+                    token = data.token;
+                    loginSection.style.display = 'none';
+                    adminSection.style.display = '';
+                    loadPins();
+                } else {
+                    loginError.textContent = data.error || '로그인 실패';
+                    passwordInput.select();
+                }
+            } catch (e) {
+                loginError.textContent = '서버 연결 실패';
+            }
+
+            loginBtn.disabled = false;
+        }
+
+        passwordInput.addEventListener('keydown', e => {
+            if (e.key === 'Enter') login();
+        });
+        loginBtn.addEventListener('click', login);
+
+        // ===== PIN 목록 =====
+        async function loadPins() {
+            try {
+                const { status, data } = await api('/api/admin/pins');
+                if (status === 401) {
+                    showToast('인증이 만료되었습니다', 'error');
+                    logout();
+                    return;
+                }
+
+                if (!Array.isArray(data) || data.length === 0) {
+                    pinList.innerHTML = '<div class="empty-msg">등록된 PIN이 없습니다</div>';
+                    pinCount.textContent = '';
+                    return;
+                }
+
+                pinCount.textContent = '총 ' + data.length + '개';
+                pinList.innerHTML = data.map(item => `
+                    <div class="pin-item">
+                        <div class="pin-info">
+                            <span class="pin-code">${item.pin}</span>
+                            <span class="pin-files">${item.fileCount}개 파일</span>
+                        </div>
+                        <button class="pin-del-btn" data-pin="${item.pin}" title="삭제">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                                <path d="M3 6h18M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2m2 0v14a2 2 0 01-2 2H8a2 2 0 01-2-2V6h12z"/>
+                            </svg>
+                        </button>
+                    </div>
+                `).join('');
+
+                // 삭제 버튼 이벤트
+                pinList.querySelectorAll('.pin-del-btn').forEach(btn => {
+                    btn.addEventListener('click', () => openDeleteModal(btn.dataset.pin));
+                });
+            } catch (e) {
+                pinList.innerHTML = '<div class="empty-msg">목록 로딩 실패</div>';
+            }
+        }
+
+        // ===== PIN 추가 =====
+        async function addPin() {
+            const pin = addPinInput.value.trim();
+            if (!pin || pin.length !== 4 || !/^\d{4}$/.test(pin)) {
+                showToast('4자리 숫자를 입력하세요', 'error');
+                addPinInput.focus();
+                return;
+            }
+
+            try {
+                const { data } = await api('/api/admin/pins', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pin })
+                });
+
+                if (data.success) {
+                    showToast(data.message, 'success');
+                    addPinInput.value = '';
+                    loadPins();
+                } else {
+                    showToast(data.error, 'error');
+                }
+            } catch (e) {
+                showToast('추가 실패', 'error');
+            }
+        }
+
+        addPinInput.addEventListener('keydown', e => {
+            if (e.key === 'Enter') addPin();
+        });
+        // 숫자만 입력 허용
+        addPinInput.addEventListener('input', () => {
+            addPinInput.value = addPinInput.value.replace(/\D/g, '');
+        });
+        addPinBtn.addEventListener('click', addPin);
+
+        // ===== PIN 삭제 =====
+        function openDeleteModal(pin) {
+            deletingPin = pin;
+            deleteTargetPin.textContent = pin;
+            confirmPinInput.value = '';
+            confirmDeleteBtn.disabled = true;
+            deleteModal.classList.add('active');
+            setTimeout(() => confirmPinInput.focus(), 100);
+        }
+
+        function closeDeleteModal() {
+            deleteModal.classList.remove('active');
+            deletingPin = '';
+        }
+
+        confirmPinInput.addEventListener('input', () => {
+            confirmPinInput.value = confirmPinInput.value.replace(/\D/g, '');
+            confirmDeleteBtn.disabled = confirmPinInput.value !== deletingPin;
+        });
+
+        confirmPinInput.addEventListener('keydown', e => {
+            if (e.key === 'Enter' && !confirmDeleteBtn.disabled) executeDelete();
+            if (e.key === 'Escape') closeDeleteModal();
+        });
+
+        cancelDeleteBtn.addEventListener('click', closeDeleteModal);
+
+        confirmDeleteBtn.addEventListener('click', executeDelete);
+
+        async function executeDelete() {
+            if (!deletingPin) return;
+
+            try {
+                const { data } = await api('/api/admin/delete-pin', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pin: deletingPin })
+                });
+
+                if (data.success) {
+                    showToast(data.message, 'success');
+                    loadPins();
+                } else {
+                    showToast(data.error, 'error');
+                }
+            } catch (e) {
+                showToast('삭제 실패', 'error');
+            }
+
+            closeDeleteModal();
+        }
+
+        // 모달 바깥 클릭으로 닫기
+        deleteModal.addEventListener('click', e => {
+            if (e.target === deleteModal) closeDeleteModal();
+        });
+
+        // ===== 기타 =====
+        function logout() {
+            token = '';
+            adminSection.style.display = 'none';
+            loginSection.style.display = '';
+            passwordInput.value = '';
+            loginError.textContent = '';
+            passwordInput.focus();
+        }
+
+        $('logoutBtn').addEventListener('click', logout);
+        $('refreshBtn').addEventListener('click', () => {
+            showToast('새로고침 중...');
+            loadPins();
+        });
+
+        // 초기 포커스
+        passwordInput.focus();
+    })();
+    </script>
+</body>
+</html>
