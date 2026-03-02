@@ -1,8 +1,17 @@
 /**
  * Violin Practice - 구간 반복 연습 플레이어
- * PIN 인증 + A-B 구간 반복 + 키보드 단축키
  */
 
+// ===== 토스트 알림 =====
+function showToast(msg, duration = 2500) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(el._timer);
+    el._timer = setTimeout(() => el.classList.remove('show'), duration);
+}
+
+// ===== 앱 진입점 =====
 class App {
     constructor() {
         this.currentPin = null;
@@ -13,21 +22,21 @@ class App {
     initLogin() {
         this.loginSection = document.getElementById('loginSection');
         this.mainSection = document.getElementById('mainSection');
-        this.pinDots = document.querySelectorAll('.pin-dot');
+        this.pinBoxes = document.querySelectorAll('.pin-box');
         this.pinError = document.getElementById('pinError');
+        this.loginCard = document.getElementById('loginCard');
         this.pinValue = '';
 
-        // PIN 패드 클릭
         document.querySelectorAll('.pin-key').forEach(btn => {
             btn.addEventListener('click', () => this.onPinKey(btn.dataset.key));
         });
 
-        // 키보드 입력 (로그인 화면)
         document.addEventListener('keydown', (e) => {
-            if (this.currentPin) return; // 이미 로그인됨
+            if (this.currentPin) return;
             if (e.key >= '0' && e.key <= '9') {
                 this.onPinKey(e.key);
             } else if (e.key === 'Backspace') {
+                e.preventDefault();
                 this.onPinKey('back');
             } else if (e.key === 'Escape') {
                 this.onPinKey('clear');
@@ -46,46 +55,66 @@ class App {
         }
 
         this.pinError.textContent = '';
-        this.updatePinDots();
+        this.updatePinBoxes();
 
         if (this.pinValue.length === 4) {
             this.checkPin(this.pinValue);
         }
     }
 
-    updatePinDots() {
-        this.pinDots.forEach((dot, i) => {
-            dot.classList.toggle('filled', i < this.pinValue.length);
+    updatePinBoxes() {
+        this.pinBoxes.forEach((box, i) => {
+            if (i < this.pinValue.length) {
+                box.textContent = '●';
+                box.classList.add('filled');
+            } else {
+                box.textContent = '';
+                box.classList.remove('filled');
+            }
         });
     }
 
     async checkPin(pin) {
+        // 버튼 비활성화 (중복 요청 방지)
+        document.querySelectorAll('.pin-key').forEach(b => b.disabled = true);
+
         try {
             const res = await fetch(`/api/check-pin?pin=${pin}`);
             const data = await res.json();
 
             if (data.valid) {
                 this.currentPin = pin;
-                this.loginSection.classList.add('hidden');
-                this.mainSection.classList.remove('hidden');
-                this.player = new AudioPlayer(pin);
+                // 성공 애니메이션 후 전환
+                this.pinBoxes.forEach(b => b.classList.add('success'));
+                setTimeout(() => this.showMain(), 400);
             } else {
-                this.pinError.textContent = data.error || '잘못된 코드입니다';
-                this.pinValue = '';
-                this.updatePinDots();
-                // 흔들기 애니메이션
-                this.pinError.parentElement.classList.add('shake');
-                setTimeout(() => this.pinError.parentElement.classList.remove('shake'), 500);
+                this.pinError.textContent = data.error || '잘못된 번호입니다';
+                this.loginCard.classList.add('shake');
+                setTimeout(() => {
+                    this.loginCard.classList.remove('shake');
+                    this.pinValue = '';
+                    this.updatePinBoxes();
+                }, 500);
             }
         } catch (err) {
             this.pinError.textContent = '서버 연결 실패';
             this.pinValue = '';
-            this.updatePinDots();
+            this.updatePinBoxes();
+        } finally {
+            document.querySelectorAll('.pin-key').forEach(b => b.disabled = false);
         }
+    }
+
+    showMain() {
+        this.loginSection.style.display = 'none';
+        this.mainSection.style.display = '';
+        this.mainSection.classList.add('fade-in');
+        this.player = new AudioPlayer(this.currentPin);
     }
 }
 
 
+// ===== 오디오 플레이어 =====
 class AudioPlayer {
     constructor(pin) {
         this.pin = pin;
@@ -96,40 +125,34 @@ class AudioPlayer {
         this.fileList = document.getElementById('fileList');
         this.fileCount = document.getElementById('fileCount');
 
-        // 컨트롤
         this.playBtn = document.getElementById('playBtn');
         this.skipBackBtn = document.getElementById('skipBackBtn');
         this.skipForwardBtn = document.getElementById('skipForwardBtn');
         this.syncBtn = document.getElementById('syncBtn');
         this.logoutBtn = document.getElementById('logoutBtn');
-        this.helpBtn = document.getElementById('helpBtn');
-        this.helpSection = document.getElementById('helpSection');
 
-        // 업로드
+        this.helpToggleBtn = document.getElementById('helpToggleBtn');
+        this.helpPanel = document.getElementById('helpPanel');
+
         this.fileUpload = document.getElementById('fileUpload');
-        this.uploadProgress = document.getElementById('uploadProgress');
 
-        // 구간 반복
         this.setLoopBtn = document.getElementById('setLoopBtn');
         this.resetLoopBtn = document.getElementById('resetLoopBtn');
         this.loopRegion = document.getElementById('loopRegion');
         this.markerA = document.getElementById('markerA');
         this.markerB = document.getElementById('markerB');
 
-        // 웨이브폼
         this.waveformContainer = document.getElementById('waveformContainer');
         this.waveformCanvas = document.getElementById('waveformCanvas');
         this.waveformCtx = this.waveformCanvas.getContext('2d');
         this.playhead = document.getElementById('playhead');
 
-        // 시간 표시
         this.currentTimeBubble = document.getElementById('currentTimeBubble');
         this.trackNameOverlay = document.getElementById('trackNameOverlay');
         this.loopStartDisplay = document.getElementById('loopStartDisplay');
         this.loopEndDisplay = document.getElementById('loopEndDisplay');
         this.selectedDuration = document.getElementById('selectedDuration');
 
-        // 볼륨 & 속도
         this.volumeSlider = document.getElementById('volumeSlider');
 
         // 상태
@@ -137,76 +160,63 @@ class AudioPlayer {
         this.currentFile = null;
         this.waveformData = null;
         this.audioContext = null;
-
-        // 구간 반복 상태
         this.loopStart = 0;
         this.loopEnd = 0;
         this.loopEnabled = false;
-
-        // 드래그 상태
         this.isDragging = false;
         this.dragTarget = null;
+        this.isUploading = false;
 
         this.init();
     }
 
     async init() {
-        this.setupEventListeners();
+        this.setupEvents();
         this.setupAudioContext();
-        this.setupKeyboardShortcuts();
+        this.setupKeyboard();
         await this.loadFiles();
-
-        window.addEventListener('resize', () => {
-            this.resizeCanvas();
-        });
+        window.addEventListener('resize', () => this.resizeCanvas());
     }
 
     setupAudioContext() {
-        const resumeAudio = () => {
+        const resume = () => {
             if (!this.audioContext) {
                 this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
             }
-            if (this.audioContext.state === 'suspended') {
-                this.audioContext.resume();
-            }
+            if (this.audioContext.state === 'suspended') this.audioContext.resume();
         };
-        document.addEventListener('touchstart', resumeAudio, { once: true });
-        document.addEventListener('click', resumeAudio, { once: true });
+        document.addEventListener('touchstart', resume, { once: true });
+        document.addEventListener('click', resume, { once: true });
     }
 
-    setupEventListeners() {
+    setupEvents() {
         // 재생
         this.playBtn.addEventListener('click', () => this.togglePlay());
         this.skipBackBtn.addEventListener('click', () => this.skip(-10));
         this.skipForwardBtn.addEventListener('click', () => this.skip(10));
 
-        // 오디오 이벤트
+        // 오디오
         this.audio.addEventListener('timeupdate', () => this.onTimeUpdate());
         this.audio.addEventListener('loadedmetadata', () => this.onLoadedMetadata());
-        this.audio.addEventListener('play', () => this.updatePlayButton(true));
-        this.audio.addEventListener('pause', () => this.updatePlayButton(false));
+        this.audio.addEventListener('play', () => this.updatePlayBtn(true));
+        this.audio.addEventListener('pause', () => this.updatePlayBtn(false));
         this.audio.addEventListener('ended', () => this.onEnded());
 
-        // 구간 반복
+        // 루프
         this.setLoopBtn.addEventListener('click', () => this.toggleLoop());
         this.resetLoopBtn.addEventListener('click', () => this.resetLoop());
-
-        // 마커 드래그
         this.setupMarkerDrag();
 
         // 웨이브폼 클릭
-        this.waveformContainer.addEventListener('click', (e) => this.handleWaveformClick(e));
+        this.waveformContainer.addEventListener('click', (e) => this.onWaveformClick(e));
 
         // 볼륨
-        this.volumeSlider.addEventListener('input', (e) => {
-            this.audio.volume = e.target.value;
-        });
+        this.volumeSlider.addEventListener('input', (e) => { this.audio.volume = e.target.value; });
 
         // 속도
         document.querySelectorAll('.speed-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
-                const speed = parseFloat(e.target.dataset.speed);
-                this.audio.playbackRate = speed;
+                this.audio.playbackRate = parseFloat(e.target.dataset.speed);
                 document.querySelectorAll('.speed-btn').forEach(b => b.classList.remove('active'));
                 e.target.classList.add('active');
             });
@@ -219,62 +229,40 @@ class AudioPlayer {
         this.logoutBtn.addEventListener('click', () => {
             this.audio.pause();
             this.audio.src = '';
-            document.getElementById('mainSection').classList.add('hidden');
-            document.getElementById('loginSection').classList.remove('hidden');
-            // 앱 리셋
             location.reload();
         });
 
-        // 도움말
-        this.helpBtn.addEventListener('click', () => {
-            this.helpSection.classList.toggle('hidden');
+        // 도움말 토글
+        this.helpToggleBtn.addEventListener('click', () => {
+            this.helpPanel.classList.toggle('open');
+            this.helpToggleBtn.classList.toggle('active');
         });
 
         // 업로드
         this.fileUpload.addEventListener('change', (e) => this.handleUpload(e));
     }
 
-    setupKeyboardShortcuts() {
+    setupKeyboard() {
         document.addEventListener('keydown', (e) => {
-            // Space → 재생/정지
             if (e.code === 'Space' && !e.ctrlKey && !e.altKey && !e.metaKey) {
-                // PIN 로그인 중이면 무시
                 if (!this.audio.src) return;
                 e.preventDefault();
                 this.togglePlay();
                 return;
             }
-
-            // Ctrl + ← → -10초
-            if (e.ctrlKey && e.key === 'ArrowLeft') {
-                e.preventDefault();
-                this.skip(-10);
-                return;
-            }
-
-            // Ctrl + → → +10초
-            if (e.ctrlKey && e.key === 'ArrowRight') {
-                e.preventDefault();
-                this.skip(10);
-                return;
-            }
-
-            // Ctrl + R → 반복 토글
-            if (e.ctrlKey && e.key === 'r') {
-                e.preventDefault();
-                this.toggleLoop();
-                return;
-            }
+            if (e.ctrlKey && e.key === 'ArrowLeft') { e.preventDefault(); this.skip(-10); return; }
+            if (e.ctrlKey && e.key === 'ArrowRight') { e.preventDefault(); this.skip(10); return; }
+            if (e.ctrlKey && e.key === 'r') { e.preventDefault(); this.toggleLoop(); return; }
         });
     }
+
+    // ===== 마커 드래그 =====
 
     setupMarkerDrag() {
         this.markerA.addEventListener('mousedown', (e) => this.startDrag(e, 'a'));
         this.markerA.addEventListener('touchstart', (e) => this.startDrag(e, 'a'), { passive: false });
-
         this.markerB.addEventListener('mousedown', (e) => this.startDrag(e, 'b'));
         this.markerB.addEventListener('touchstart', (e) => this.startDrag(e, 'b'), { passive: false });
-
         document.addEventListener('mousemove', (e) => this.onDrag(e));
         document.addEventListener('mouseup', () => this.endDrag());
         document.addEventListener('touchmove', (e) => this.onDrag(e), { passive: false });
@@ -283,22 +271,15 @@ class AudioPlayer {
     }
 
     startDrag(e, target) {
-        e.preventDefault();
-        e.stopPropagation();
+        e.preventDefault(); e.stopPropagation();
         this.isDragging = true;
         this.dragTarget = target;
-
-        if (target === 'a') {
-            this.markerA.classList.add('dragging');
-        } else {
-            this.markerB.classList.add('dragging');
-        }
+        (target === 'a' ? this.markerA : this.markerB).classList.add('dragging');
     }
 
     onDrag(e) {
         if (!this.isDragging || !this.audio.duration) return;
         e.preventDefault();
-
         const rect = this.waveformContainer.getBoundingClientRect();
         const clientX = e.touches ? e.touches[0].clientX : e.clientX;
         const x = Math.max(0, Math.min(clientX - rect.left, rect.width));
@@ -306,11 +287,10 @@ class AudioPlayer {
 
         if (this.dragTarget === 'a') {
             this.loopStart = Math.max(0, Math.min(time, this.loopEnd - 0.5));
-        } else if (this.dragTarget === 'b') {
+        } else {
             this.loopEnd = Math.max(this.loopStart + 0.5, Math.min(time, this.audio.duration));
         }
-
-        this.updateMarkerPositions();
+        this.updateMarkers();
         this.updateTimeDisplay();
     }
 
@@ -322,15 +302,10 @@ class AudioPlayer {
         this.dragTarget = null;
     }
 
-    handleWaveformClick(e) {
-        if (this.isDragging) return;
-        if (e.target.closest('.loop-marker')) return;
-        if (!this.audio.duration) return;
-
+    onWaveformClick(e) {
+        if (this.isDragging || e.target.closest('.loop-marker') || !this.audio.duration) return;
         const rect = this.waveformContainer.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const percent = x / rect.width;
-        this.audio.currentTime = percent * this.audio.duration;
+        this.audio.currentTime = ((e.clientX - rect.left) / rect.width) * this.audio.duration;
     }
 
     // ===== 파일 관리 =====
@@ -340,31 +315,28 @@ class AudioPlayer {
             const res = await fetch(`/api/files?pin=${this.pin}`);
             this.files = await res.json();
             this.renderFileList();
-        } catch (err) {
-            this.fileList.innerHTML = '<div class="loading">파일을 불러올 수 없습니다</div>';
+        } catch {
+            this.fileList.innerHTML = '<div class="empty-msg">파일을 불러올 수 없습니다</div>';
         }
     }
 
     renderFileList() {
         if (this.files.length === 0) {
-            this.fileList.innerHTML = '<div class="loading">파일이 없습니다. 업로드하거나 동기화하세요.</div>';
-            this.fileCount.textContent = '0개';
+            this.fileList.innerHTML = '<div class="empty-msg">연습곡이 없습니다<br><small>위의 업로드 버튼으로 추가하세요</small></div>';
+            this.fileCount.textContent = '';
             return;
         }
-
-        this.fileCount.textContent = `${this.files.length}개`;
-        this.fileList.innerHTML = this.files.map(file => `
-            <div class="file-item" data-name="${file.name}">
-                <span class="file-icon">${file.name.toLowerCase().endsWith('.m4a') ? '🎵' : '🎶'}</span>
-                <span class="file-name">${this.formatFileName(file.name)}</span>
-                <span class="file-size">${this.formatSize(file.size)}</span>
+        this.fileCount.textContent = `${this.files.length}곡`;
+        this.fileList.innerHTML = this.files.map(f => `
+            <div class="file-item" data-name="${f.name}">
+                <span class="fi-name">${this.fmtName(f.name)}</span>
+                <span class="fi-size">${this.fmtSize(f.size)}</span>
             </div>
         `).join('');
 
         this.fileList.querySelectorAll('.file-item').forEach(item => {
             item.addEventListener('click', () => {
-                const name = item.dataset.name;
-                this.loadTrack(name);
+                this.loadTrack(item.dataset.name);
                 this.fileList.querySelectorAll('.file-item').forEach(i => i.classList.remove('active'));
                 item.classList.add('active');
             });
@@ -375,292 +347,187 @@ class AudioPlayer {
         const files = e.target.files;
         if (!files || files.length === 0) return;
 
-        this.uploadProgress.classList.remove('hidden');
+        this.isUploading = true;
+        showToast(`${files.length}개 파일 업로드 중...`, 60000);
 
+        let ok = 0;
         for (const file of files) {
-            const formData = new FormData();
-            formData.append('pin', this.pin);
-            formData.append('file', file);
-
+            const fd = new FormData();
+            fd.append('pin', this.pin);
+            fd.append('file', file);
             try {
-                const res = await fetch('/api/upload', {
-                    method: 'POST',
-                    body: formData
-                });
-                const result = await res.json();
-                if (!result.success) {
-                    alert(result.error);
-                }
+                const res = await fetch('/api/upload', { method: 'POST', body: fd });
+                const r = await res.json();
+                if (r.success) ok++;
+                else showToast(r.error, 3000);
             } catch (err) {
-                alert('업로드 실패: ' + err.message);
+                showToast('업로드 실패: ' + err.message, 3000);
             }
         }
 
-        this.uploadProgress.classList.add('hidden');
+        this.isUploading = false;
         this.fileUpload.value = '';
-        await this.loadFiles();
+        if (ok > 0) {
+            showToast(`${ok}개 파일 업로드 완료`);
+            await this.loadFiles();
+        }
     }
 
-    formatFileName(name) {
-        return name.replace(/\.(m4a|mp3)$/i, '');
+    fmtName(n) { return n.replace(/\.(m4a|mp3)$/i, ''); }
+    fmtSize(b) {
+        if (b < 1024) return b + ' B';
+        if (b < 1048576) return (b / 1024).toFixed(1) + ' KB';
+        return (b / 1048576).toFixed(1) + ' MB';
     }
 
-    formatSize(bytes) {
-        if (bytes < 1024) return bytes + ' B';
-        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-        return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-    }
-
-    // ===== 트랙 로드 & 웨이브폼 =====
+    // ===== 트랙 & 웨이브폼 =====
 
     async loadTrack(filename) {
         this.currentFile = filename;
         const url = `/audio/${this.pin}/${encodeURIComponent(filename)}`;
+        this.trackNameOverlay.textContent = this.fmtName(filename);
 
-        this.trackNameOverlay.textContent = this.formatFileName(filename);
-
-        // 먼저 플레이어를 보여준 후 웨이브폼 생성 (파형 버그 수정)
-        this.playerSection.classList.remove('hidden');
-
+        // 플레이어 먼저 표시 (파형 버그 수정)
+        this.playerSection.style.display = '';
         this.audio.src = url;
         this.audio.load();
 
-        // DOM이 렌더링되도록 한 프레임 대기
+        // 2프레임 대기 후 캔버스 사이즈 확정
         await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-
         this.resizeCanvas();
         await this.generateWaveform(url);
     }
 
     async generateWaveform(url) {
         try {
-            const response = await fetch(url);
-            const arrayBuffer = await response.arrayBuffer();
-
-            if (!this.audioContext) {
-                this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            }
-
-            const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
-            const channelData = audioBuffer.getChannelData(0);
-
-            const samples = 500;
-            const blockSize = Math.floor(channelData.length / samples);
+            const resp = await fetch(url);
+            const buf = await resp.arrayBuffer();
+            if (!this.audioContext) this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const ab = await this.audioContext.decodeAudioData(buf);
+            const ch = ab.getChannelData(0);
+            const N = 500, bs = Math.floor(ch.length / N);
             this.waveformData = [];
-
-            for (let i = 0; i < samples; i++) {
-                let max = 0;
-                let min = 0;
-                for (let j = 0; j < blockSize; j++) {
-                    const idx = i * blockSize + j;
-                    if (idx < channelData.length) {
-                        const val = channelData[idx];
-                        if (val > max) max = val;
-                        if (val < min) min = val;
-                    }
+            for (let i = 0; i < N; i++) {
+                let mx = 0, mn = 0;
+                for (let j = 0; j < bs; j++) {
+                    const v = ch[i * bs + j] || 0;
+                    if (v > mx) mx = v;
+                    if (v < mn) mn = v;
                 }
-                this.waveformData.push({ max, min });
+                this.waveformData.push({ max: mx, min: mn });
             }
-
-            // 정규화
-            const maxAbs = Math.max(
-                ...this.waveformData.map(d => Math.max(Math.abs(d.max), Math.abs(d.min)))
-            );
-            if (maxAbs > 0) {
-                this.waveformData = this.waveformData.map(d => ({
-                    max: d.max / maxAbs,
-                    min: d.min / maxAbs
-                }));
-            }
-
+            const peak = Math.max(...this.waveformData.map(d => Math.max(Math.abs(d.max), Math.abs(d.min))));
+            if (peak > 0) this.waveformData = this.waveformData.map(d => ({ max: d.max / peak, min: d.min / peak }));
             this.drawWaveform();
-        } catch (error) {
-            console.error('웨이브폼 생성 실패:', error);
-            // 폴백: 랜덤 웨이브폼
-            this.waveformData = Array(500).fill(0).map(() => {
-                const v = Math.random() * 0.7 + 0.1;
-                return { max: v, min: -v };
-            });
+        } catch (err) {
+            console.error('Waveform error:', err);
+            this.waveformData = Array(500).fill(0).map(() => { const v = Math.random() * 0.7 + 0.1; return { max: v, min: -v }; });
             this.drawWaveform();
         }
     }
 
     resizeCanvas() {
-        const container = this.waveformCanvas.parentElement;
-        const rect = container.getBoundingClientRect();
-
-        // 컨테이너가 아직 보이지 않으면 무시
+        const rect = this.waveformCanvas.parentElement.getBoundingClientRect();
         if (rect.width === 0 || rect.height === 0) return;
-
         const dpr = window.devicePixelRatio || 1;
-
         this.waveformCanvas.width = rect.width * dpr;
         this.waveformCanvas.height = rect.height * dpr;
-
-        this.waveformCtx.setTransform(1, 0, 0, 1, 0, 0); // 리셋
+        this.waveformCtx.setTransform(1, 0, 0, 1, 0, 0);
         this.waveformCtx.scale(dpr, dpr);
-
         this.waveformCanvas.style.width = rect.width + 'px';
         this.waveformCanvas.style.height = rect.height + 'px';
-
-        if (this.waveformData) {
-            this.drawWaveform();
-        }
-
-        this.updateMarkerPositions();
+        if (this.waveformData) this.drawWaveform();
+        this.updateMarkers();
     }
 
     drawWaveform() {
         if (!this.waveformData) return;
-
         const ctx = this.waveformCtx;
-        const container = this.waveformCanvas.parentElement;
-        const rect = container.getBoundingClientRect();
-        const width = rect.width;
-        const height = rect.height;
+        const rect = this.waveformCanvas.parentElement.getBoundingClientRect();
+        const w = rect.width, h = rect.height;
+        if (w === 0 || h === 0) return;
+        const cy = h / 2;
+        ctx.clearRect(0, 0, w, h);
 
-        if (width === 0 || height === 0) return;
+        const prog = this.audio.duration ? this.audio.currentTime / this.audio.duration : 0;
+        const px = prog * w, bw = w / this.waveformData.length;
 
-        const centerY = height / 2;
+        const drawHalf = (start, end, color) => {
+            ctx.beginPath();
+            ctx.moveTo(start, cy);
+            for (let i = Math.floor(start / bw); i < this.waveformData.length; i++) {
+                const x = i * bw + bw / 2;
+                if (x < start) continue; if (x > end) break;
+                ctx.lineTo(x, cy - this.waveformData[i].max * cy * 0.85);
+            }
+            for (let i = Math.min(Math.floor(end / bw), this.waveformData.length - 1); i >= 0; i--) {
+                const x = i * bw + bw / 2;
+                if (x < start) break; if (x > end) continue;
+                ctx.lineTo(x, cy - this.waveformData[i].min * cy * 0.85);
+            }
+            ctx.closePath();
+            ctx.fillStyle = color;
+            ctx.fill();
+        };
 
-        ctx.clearRect(0, 0, width, height);
+        drawHalf(0, px, '#faf0dc');
+        drawHalf(px, w, '#d4c8a8');
 
-        const progress = this.audio.duration ? this.audio.currentTime / this.audio.duration : 0;
-        const progressX = progress * width;
-        const barWidth = width / this.waveformData.length;
-
-        // 재생된 부분
-        ctx.beginPath();
-        ctx.moveTo(0, centerY);
-        const playedSamples = Math.floor(progressX / barWidth);
-
-        for (let i = 0; i <= playedSamples && i < this.waveformData.length; i++) {
-            const x = i * barWidth + barWidth / 2;
-            if (x > progressX) break;
-            ctx.lineTo(x, centerY - (this.waveformData[i].max * centerY * 0.85));
-        }
-        for (let i = Math.min(playedSamples, this.waveformData.length - 1); i >= 0; i--) {
-            const x = i * barWidth + barWidth / 2;
-            if (x > progressX) continue;
-            ctx.lineTo(x, centerY - (this.waveformData[i].min * centerY * 0.85));
-        }
-        ctx.closePath();
-        ctx.fillStyle = '#faf0dc';
-        ctx.fill();
-
-        // 미재생 부분
-        ctx.beginPath();
-        ctx.moveTo(progressX, centerY);
-        for (let i = playedSamples; i < this.waveformData.length; i++) {
-            const x = i * barWidth + barWidth / 2;
-            ctx.lineTo(x, centerY - (this.waveformData[i].max * centerY * 0.85));
-        }
-        for (let i = this.waveformData.length - 1; i >= playedSamples; i--) {
-            const x = i * barWidth + barWidth / 2;
-            ctx.lineTo(x, centerY - (this.waveformData[i].min * centerY * 0.85));
-        }
-        ctx.closePath();
-        ctx.fillStyle = '#d4c8a8';
-        ctx.fill();
-
-        // 중앙선
-        ctx.beginPath();
-        ctx.moveTo(0, centerY);
-        ctx.lineTo(width, centerY);
-        ctx.strokeStyle = 'rgba(212, 200, 168, 0.3)';
-        ctx.lineWidth = 1;
-        ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, cy); ctx.lineTo(w, cy);
+        ctx.strokeStyle = 'rgba(212,200,168,0.3)'; ctx.lineWidth = 1; ctx.stroke();
     }
 
-    // ===== 재생 컨트롤 =====
+    // ===== 재생 =====
 
-    togglePlay() {
-        if (this.audio.paused) {
-            this.audio.play();
-        } else {
-            this.audio.pause();
-        }
+    togglePlay() { this.audio.paused ? this.audio.play() : this.audio.pause(); }
+
+    updatePlayBtn(playing) {
+        this.playBtn.querySelector('.icon-play').style.display = playing ? 'none' : '';
+        this.playBtn.querySelector('.icon-pause').style.display = playing ? '' : 'none';
     }
 
-    updatePlayButton(isPlaying) {
-        const playIcon = this.playBtn.querySelector('.play-icon');
-        const pauseIcon = this.playBtn.querySelector('.pause-icon');
-        if (isPlaying) {
-            playIcon.classList.add('hidden');
-            pauseIcon.classList.remove('hidden');
-        } else {
-            playIcon.classList.remove('hidden');
-            pauseIcon.classList.add('hidden');
-        }
-    }
-
-    skip(seconds) {
-        this.audio.currentTime = Math.max(0, Math.min(
-            this.audio.currentTime + seconds,
-            this.audio.duration || 0
-        ));
-    }
+    skip(s) { this.audio.currentTime = Math.max(0, Math.min(this.audio.currentTime + s, this.audio.duration || 0)); }
 
     onTimeUpdate() {
-        const current = this.audio.currentTime;
-        const duration = this.audio.duration || 0;
-
-        this.currentTimeBubble.textContent = this.formatTimeMs(current);
-
-        const percent = duration ? (current / duration) * 100 : 0;
-        const containerWidth = this.waveformContainer.offsetWidth;
-        const bubbleWidth = this.currentTimeBubble.offsetWidth;
-
-        let bubbleLeft = (percent / 100) * containerWidth;
-        bubbleLeft = Math.max(bubbleWidth / 2 + 5, Math.min(bubbleLeft, containerWidth - bubbleWidth / 2 - 5));
-        this.currentTimeBubble.style.left = bubbleLeft + 'px';
-
-        this.playhead.style.left = percent + '%';
-
+        const cur = this.audio.currentTime, dur = this.audio.duration || 0;
+        this.currentTimeBubble.textContent = this.fmtTime(cur);
+        const pct = dur ? (cur / dur) * 100 : 0;
+        const cw = this.waveformContainer.offsetWidth, bw = this.currentTimeBubble.offsetWidth;
+        let bl = (pct / 100) * cw;
+        bl = Math.max(bw / 2 + 4, Math.min(bl, cw - bw / 2 - 4));
+        this.currentTimeBubble.style.left = bl + 'px';
+        this.playhead.style.left = pct + '%';
         this.drawWaveform();
-
-        // 구간 반복 체크
-        if (this.loopEnabled && current >= this.loopEnd) {
-            this.audio.currentTime = this.loopStart;
-        }
+        if (this.loopEnabled && cur >= this.loopEnd) this.audio.currentTime = this.loopStart;
     }
 
     onLoadedMetadata() {
-        const duration = this.audio.duration;
         this.loopStart = 0;
-        this.loopEnd = duration;
+        this.loopEnd = this.audio.duration;
         this.loopEnabled = false;
         this.setLoopBtn.classList.remove('active');
-
-        this.updateMarkerPositions();
+        this.updateMarkers();
         this.updateTimeDisplay();
-
-        // 메타데이터 로드 후 캔버스 재조정
         this.resizeCanvas();
     }
 
     onEnded() {
-        if (this.loopEnabled) {
-            this.audio.currentTime = this.loopStart;
-            this.audio.play();
-        } else {
-            this.updatePlayButton(false);
-        }
+        if (this.loopEnabled) { this.audio.currentTime = this.loopStart; this.audio.play(); }
+        else this.updatePlayBtn(false);
     }
 
-    formatTimeMs(seconds) {
-        if (!seconds || !isFinite(seconds)) return '00:00.0';
-        const mins = Math.floor(seconds / 60);
-        const secs = Math.floor(seconds % 60);
-        const ms = Math.floor((seconds % 1) * 10);
-        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}.${ms}`;
+    fmtTime(s) {
+        if (!s || !isFinite(s)) return '00:00.0';
+        const m = Math.floor(s / 60), sec = Math.floor(s % 60), ms = Math.floor((s % 1) * 10);
+        return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}.${ms}`;
     }
 
-    // ===== 구간 반복 =====
+    // ===== 루프 =====
 
     toggleLoop() {
         this.loopEnabled = !this.loopEnabled;
         this.setLoopBtn.classList.toggle('active', this.loopEnabled);
+        showToast(this.loopEnabled ? '구간 반복 ON' : '구간 반복 OFF');
     }
 
     resetLoop() {
@@ -669,50 +536,39 @@ class AudioPlayer {
         this.loopEnd = this.audio.duration;
         this.loopEnabled = false;
         this.setLoopBtn.classList.remove('active');
-        this.updateMarkerPositions();
+        this.updateMarkers();
         this.updateTimeDisplay();
     }
 
-    updateMarkerPositions() {
+    updateMarkers() {
         if (!this.audio.duration) return;
-        const duration = this.audio.duration;
-        const startPercent = (this.loopStart / duration) * 100;
-        const endPercent = (this.loopEnd / duration) * 100;
-
-        this.markerA.style.left = startPercent + '%';
-        this.markerB.style.left = endPercent + '%';
-        this.loopRegion.style.left = startPercent + '%';
-        this.loopRegion.style.width = (endPercent - startPercent) + '%';
+        const d = this.audio.duration;
+        const sp = (this.loopStart / d) * 100, ep = (this.loopEnd / d) * 100;
+        this.markerA.style.left = sp + '%';
+        this.markerB.style.left = ep + '%';
+        this.loopRegion.style.left = sp + '%';
+        this.loopRegion.style.width = (ep - sp) + '%';
     }
 
     updateTimeDisplay() {
-        this.loopStartDisplay.textContent = this.formatTimeMs(this.loopStart);
-        this.loopEndDisplay.textContent = this.formatTimeMs(this.loopEnd);
-        this.selectedDuration.textContent = this.formatTimeMs(this.loopEnd - this.loopStart);
+        this.loopStartDisplay.textContent = this.fmtTime(this.loopStart);
+        this.loopEndDisplay.textContent = this.fmtTime(this.loopEnd);
+        this.selectedDuration.textContent = this.fmtTime(this.loopEnd - this.loopStart);
     }
 
-    // ===== FTP 동기화 =====
+    // ===== FTP =====
 
     async syncFTP() {
         this.syncBtn.classList.add('syncing');
+        showToast('동기화 중...', 30000);
         try {
             const res = await fetch(`/api/sync?pin=${this.pin}`);
-            const result = await res.json();
-            if (result.success) {
-                await this.loadFiles();
-                alert('동기화 완료: ' + result.message);
-            } else {
-                alert('동기화 실패: ' + result.error);
-            }
-        } catch (err) {
-            alert('동기화 오류: ' + err.message);
-        } finally {
-            this.syncBtn.classList.remove('syncing');
-        }
+            const r = await res.json();
+            if (r.success) { await this.loadFiles(); showToast('동기화 완료'); }
+            else showToast('동기화 실패: ' + r.error, 4000);
+        } catch (err) { showToast('동기화 오류', 3000); }
+        finally { this.syncBtn.classList.remove('syncing'); }
     }
 }
 
-// 앱 시작
-document.addEventListener('DOMContentLoaded', () => {
-    new App();
-});
+document.addEventListener('DOMContentLoaded', () => new App());

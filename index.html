@@ -14,20 +14,22 @@
 <body>
     <div class="app-container">
 
-        <!-- ===== PIN 로그인 화면 ===== -->
+        <!-- ===== PIN 로그인 화면 (초기 전체화면) ===== -->
         <section id="loginSection" class="login-section">
-            <div class="login-card">
+            <div class="login-card" id="loginCard">
+                <div class="login-icon">🎻</div>
                 <h1 class="login-title">Violin Practice</h1>
-                <p class="login-subtitle">연습 코드를 입력하세요</p>
+                <p class="login-subtitle">휴대폰 번호 뒷자리 4자리를 입력하세요</p>
 
-                <div class="pin-display">
-                    <span class="pin-dot" data-index="0"></span>
-                    <span class="pin-dot" data-index="1"></span>
-                    <span class="pin-dot" data-index="2"></span>
-                    <span class="pin-dot" data-index="3"></span>
+                <div class="pin-input-area">
+                    <div class="pin-boxes">
+                        <div class="pin-box" data-index="0"></div>
+                        <div class="pin-box" data-index="1"></div>
+                        <div class="pin-box" data-index="2"></div>
+                        <div class="pin-box" data-index="3"></div>
+                    </div>
+                    <div id="pinError" class="pin-error"></div>
                 </div>
-
-                <div id="pinError" class="pin-error"></div>
 
                 <div class="pin-pad">
                     <button class="pin-key" data-key="1">1</button>
@@ -39,174 +41,150 @@
                     <button class="pin-key" data-key="7">7</button>
                     <button class="pin-key" data-key="8">8</button>
                     <button class="pin-key" data-key="9">9</button>
-                    <button class="pin-key pin-key-clear" data-key="clear">C</button>
+                    <button class="pin-key pin-key-func" data-key="clear">C</button>
                     <button class="pin-key" data-key="0">0</button>
-                    <button class="pin-key pin-key-back" data-key="back">←</button>
+                    <button class="pin-key pin-key-func" data-key="back">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
+                            <path d="M19 12H5M12 19l-7-7 7-7"/>
+                        </svg>
+                    </button>
                 </div>
             </div>
         </section>
 
-        <!-- ===== 메인 앱 (로그인 후) ===== -->
-        <section id="mainSection" class="main-section hidden">
+        <!-- ===== 메인 앱 (로그인 성공 후 페이드인) ===== -->
+        <section id="mainSection" class="main-section" style="display:none;">
 
             <!-- 헤더 -->
             <header class="header">
-                <div class="header-content">
-                    <h1>Violin Practice</h1>
-                    <p class="subtitle">구간 반복 연습 플레이어</p>
+                <div class="header-left">
+                    <h1 class="header-title">Violin Practice</h1>
                 </div>
                 <div class="header-actions">
-                    <button id="helpBtn" class="icon-btn" title="도움말">?</button>
-                    <button id="syncBtn" class="icon-btn sync-btn" title="FTP 동기화">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <button id="helpToggleBtn" class="header-btn" title="도움말">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                            <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3M12 17h.01"/>
+                        </svg>
+                    </button>
+                    <button id="syncBtn" class="header-btn" title="서버 동기화">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
                             <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
                         </svg>
                     </button>
-                    <button id="logoutBtn" class="icon-btn" title="로그아웃">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <button id="logoutBtn" class="header-btn" title="로그아웃">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
                             <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/>
                         </svg>
                     </button>
                 </div>
             </header>
 
+            <!-- 도움말 (접히는 패널) -->
+            <div id="helpPanel" class="help-panel">
+                <div class="help-content">
+                    <div class="help-row">
+                        <kbd>Space</kbd> 재생/정지
+                        <span class="help-sep">|</span>
+                        <kbd>Ctrl</kbd>+<kbd>←</kbd><kbd>→</kbd> 10초 이동
+                        <span class="help-sep">|</span>
+                        <kbd>Ctrl</kbd>+<kbd>R</kbd> 반복
+                    </div>
+                    <div class="help-row">
+                        A/B 마커를 드래그하여 반복 구간 설정 &middot; 업로드로 연습곡 추가
+                    </div>
+                </div>
+            </div>
+
             <!-- 파일 목록 -->
             <section class="file-list-section">
                 <div class="section-header">
-                    <h2>연습 파일</h2>
+                    <h2>내 연습곡</h2>
                     <div class="section-actions">
-                        <span id="fileCount" class="file-count">0개</span>
-                        <label id="uploadLabel" class="upload-btn" title="파일 업로드">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                        <span id="fileCount" class="file-count"></span>
+                        <label class="upload-label" title="파일 업로드">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
                                 <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
                             </svg>
-                            업로드
+                            <span>업로드</span>
                             <input type="file" id="fileUpload" accept=".m4a,.mp3" multiple hidden>
                         </label>
                     </div>
                 </div>
-                <div id="uploadProgress" class="upload-progress hidden">
-                    <div class="upload-progress-bar"></div>
-                    <span class="upload-progress-text">업로드 중...</span>
-                </div>
                 <div id="fileList" class="file-list">
-                    <div class="loading">파일 로딩 중...</div>
+                    <div class="empty-msg">파일 로딩 중...</div>
                 </div>
             </section>
 
             <!-- 플레이어 -->
-            <section id="playerSection" class="player-section hidden">
+            <section id="playerSection" class="player-section" style="display:none;">
 
-                <!-- 웨이브폼 영역 -->
+                <!-- 웨이브폼 -->
                 <div class="waveform-wrapper">
-                    <div id="currentTimeBubble" class="current-time-bubble">00:00.0</div>
-                    <div id="trackNameOverlay" class="track-name-overlay">-</div>
+                    <div id="currentTimeBubble" class="time-bubble">00:00.0</div>
+                    <div id="trackNameOverlay" class="track-name">-</div>
 
                     <div class="waveform-container" id="waveformContainer">
                         <canvas id="waveformCanvas"></canvas>
                         <div id="loopRegion" class="loop-region"></div>
-                        <div id="markerA" class="loop-marker loop-marker-a">
-                            <span class="marker-label">A</span>
-                        </div>
-                        <div id="markerB" class="loop-marker loop-marker-b">
-                            <span class="marker-label">B</span>
-                        </div>
+                        <div id="markerA" class="loop-marker marker-a"><span class="marker-label">A</span></div>
+                        <div id="markerB" class="loop-marker marker-b"><span class="marker-label">B</span></div>
                         <div id="playhead" class="playhead"></div>
                     </div>
 
-                    <div class="time-display">
+                    <div class="time-bar">
                         <span id="loopStartDisplay" class="time-edge">00:00.0</span>
-                        <div id="loopTimeCenter" class="loop-time-center">
-                            <span id="selectedDuration">00:00.0</span>
-                        </div>
+                        <span id="selectedDuration" class="time-center">00:00.0</span>
                         <span id="loopEndDisplay" class="time-edge end">00:00.0</span>
                     </div>
                 </div>
 
-                <!-- 메인 컨트롤 -->
-                <div class="controls-main">
-                    <button id="skipBackBtn" class="control-btn" title="-10초 (Ctrl+←)">
-                        <svg viewBox="0 0 24 24" fill="currentColor">
+                <!-- 컨트롤 -->
+                <div class="controls">
+                    <button id="skipBackBtn" class="ctrl-btn" title="-10초">
+                        <svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24">
                             <path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/>
                         </svg>
                     </button>
-                    <button id="playBtn" class="play-btn" title="재생 (Space)">
-                        <svg class="play-icon" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M8 5v14l11-7z"/>
-                        </svg>
-                        <svg class="pause-icon hidden" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
-                        </svg>
+                    <button id="playBtn" class="play-btn" title="재생">
+                        <svg class="icon-play" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                        <svg class="icon-pause" viewBox="0 0 24 24" fill="currentColor" style="display:none;"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
                     </button>
-                    <button id="skipForwardBtn" class="control-btn" title="+10초 (Ctrl+→)">
-                        <svg viewBox="0 0 24 24" fill="currentColor">
+                    <button id="skipForwardBtn" class="ctrl-btn" title="+10초">
+                        <svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24">
                             <path d="M12 5V1l5 5-5 5V7c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6h2c0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8z"/>
                         </svg>
                     </button>
                 </div>
 
-                <!-- 구간 반복 컨트롤 -->
-                <div class="loop-controls">
-                    <button id="setLoopBtn" class="loop-toggle-btn" title="구간 반복 (Ctrl+R)">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <!-- 하단 옵션 바 -->
+                <div class="options-bar">
+                    <button id="setLoopBtn" class="opt-btn" title="구간 반복">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
                             <path d="M17 2l4 4-4 4M3 11V9a4 4 0 014-4h14M7 22l-4-4 4-4M21 13v2a4 4 0 01-4 4H3"/>
                         </svg>
-                        <span>반복</span>
+                        반복
                     </button>
-                    <button id="resetLoopBtn" class="reset-btn" title="구간 초기화">
-                        ✕
-                    </button>
-                </div>
-
-                <!-- 속도 조절 -->
-                <div class="speed-control">
-                    <span class="speed-label">속도</span>
-                    <div class="speed-buttons">
-                        <button class="speed-btn" data-speed="0.6">0.6×</button>
-                        <button class="speed-btn" data-speed="0.8">0.8×</button>
-                        <button class="speed-btn active" data-speed="1">1.0×</button>
+                    <button id="resetLoopBtn" class="opt-btn opt-btn-danger" title="구간 초기화">초기화</button>
+                    <div class="speed-group">
+                        <button class="speed-btn" data-speed="0.6">0.6x</button>
+                        <button class="speed-btn" data-speed="0.8">0.8x</button>
+                        <button class="speed-btn active" data-speed="1">1.0x</button>
                     </div>
-                </div>
-
-                <!-- 볼륨 -->
-                <div class="volume-control">
-                    <svg viewBox="0 0 24 24" fill="currentColor" class="volume-icon">
-                        <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
-                    </svg>
-                    <input type="range" id="volumeSlider" min="0" max="1" step="0.01" value="1">
-                </div>
-            </section>
-
-            <!-- 도움말 -->
-            <section id="helpSection" class="help-section hidden">
-                <div class="help-card">
-                    <h3>사용 설명서</h3>
-                    <div class="help-group">
-                        <h4>키보드 단축키</h4>
-                        <table class="help-table">
-                            <tr><td><kbd>Space</kbd></td><td>재생 / 정지</td></tr>
-                            <tr><td><kbd>Ctrl</kbd> + <kbd>←</kbd></td><td>10초 뒤로</td></tr>
-                            <tr><td><kbd>Ctrl</kbd> + <kbd>→</kbd></td><td>10초 앞으로</td></tr>
-                            <tr><td><kbd>Ctrl</kbd> + <kbd>R</kbd></td><td>구간 반복 켜기/끄기</td></tr>
-                        </table>
-                    </div>
-                    <div class="help-group">
-                        <h4>구간 반복</h4>
-                        <p>웨이브폼의 <strong>A, B 마커</strong>를 드래그하여 반복 구간을 설정합니다.</p>
-                        <p><strong>반복</strong> 버튼을 눌러 구간 반복을 켜거나 끕니다.</p>
-                        <p><strong>✕</strong> 버튼으로 구간을 초기화합니다.</p>
-                    </div>
-                    <div class="help-group">
-                        <h4>파일 관리</h4>
-                        <p><strong>업로드</strong> 버튼으로 M4A, MP3 파일을 추가합니다.</p>
-                        <p>동기화 버튼으로 FTP 서버와 파일을 동기화합니다.</p>
+                    <div class="vol-group">
+                        <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16" class="vol-icon">
+                            <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>
+                        </svg>
+                        <input type="range" id="volumeSlider" min="0" max="1" step="0.01" value="1">
                     </div>
                 </div>
             </section>
 
         </section>
 
-        <!-- 오디오 요소 -->
+        <!-- 토스트 알림 -->
+        <div id="toast" class="toast"></div>
+
+        <!-- 오디오 -->
         <audio id="audioPlayer" preload="auto" playsinline></audio>
     </div>
 
