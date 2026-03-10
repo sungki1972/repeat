@@ -16,6 +16,15 @@ class App {
     constructor() {
         this.currentPin = null;
         this.player = null;
+
+        // F5 새로고침 시 로그인 유지
+        const savedPin = sessionStorage.getItem('violin_pin');
+        if (savedPin) {
+            this.currentPin = savedPin;
+            this.showMain();
+            return;
+        }
+
         this.initLogin();
     }
 
@@ -129,6 +138,7 @@ class App {
 
             if (data.valid) {
                 this.currentPin = pin;
+                sessionStorage.setItem('violin_pin', pin);
                 this.pinInputs.forEach(i => i.classList.add('success'));
                 setTimeout(() => this.showMain(), 400);
             } else {
@@ -281,6 +291,7 @@ class AudioPlayer {
         this.logoutBtn.addEventListener('click', () => {
             this.audio.pause();
             this.audio.src = '';
+            sessionStorage.removeItem('violin_pin');
             location.reload();
         });
 

@@ -240,6 +240,7 @@ class RequestHandler(SimpleHTTPRequestHandler):
             return
 
         pin_dir.mkdir(parents=True, exist_ok=True)
+        ftp_mkdir(pin)
         print(f"  Admin: Created PIN folder {pin}")
         self.send_json({'success': True, 'message': f'{pin} 생성 완료'})
 
@@ -265,6 +266,7 @@ class RequestHandler(SimpleHTTPRequestHandler):
             return
 
         shutil.rmtree(pin_dir)
+        ftp_rmdir(pin)
         # 메타데이터에서도 삭제
         meta = load_pin_meta()
         if pin in meta:
@@ -417,10 +419,16 @@ class RequestHandler(SimpleHTTPRequestHandler):
             self.send_json({'success': False, 'error': 'M4A 또는 MP3 파일만 가능합니다'}, 400)
             return
         save_path = pin_dir / filename
+        file_data = file_item.file.read()
         with open(save_path, 'wb') as f:
-            f.write(file_item.file.read())
+            f.write(file_data)
         print(f"  Uploaded: {pin}/{filename} ({save_path.stat().st_size} bytes)")
-        self.send_json({'success': True, 'message': f'{filename} 업로드 완료'})
+        # FTP에도 업로드
+        ftp_ok = ftp_upload(pin, filename, file_data)
+        msg = f'{filename} 업로드 완료'
+        if not ftp_ok:
+            msg += ' (FTP 동기화 실패 - 로컬에만 저장됨)'
+        self.send_json({'success': True, 'message': msg})
 
     def handle_delete(self):
         data = self.read_json_body()
@@ -438,7 +446,12 @@ class RequestHandler(SimpleHTTPRequestHandler):
             return
         file_path.unlink()
         print(f"  Deleted: {pin}/{safe_name}")
-        self.send_json({'success': True, 'message': f'{safe_name} 삭제 완료'})
+        # FTP에서도 삭제
+        ftp_ok = ftp_delete_file(pin, safe_name)
+        msg = f'{safe_name} 삭제 완료'
+        if not ftp_ok:
+            msg += ' (FTP 동기화 실패 - 로컬에서만 삭제됨)'
+        self.send_json({'success': True, 'message': msg})
 
     # ===== 유틸 =====
 
@@ -463,12 +476,88 @@ class RequestHandler(SimpleHTTPRequestHandler):
         print(f"[{datetime.now().strftime('%H:%M:%S')}] {args[0]}")
 
 
-def sync_ftp(target_pin=None):
-    AUDIO_CACHE_DIR.mkdir(exist_ok=True)
+def ftp_connect():
+    """FTP 연결 생성"""
     ftp = FTP()
     ftp.connect(FTP_CONFIG['host'], FTP_CONFIG['port'])
     ftp.login(FTP_CONFIG['user'], FTP_CONFIG['pass'])
     ftp.cwd(FTP_CONFIG['path'])
+    return ftp
+
+
+def ftp_upload(pin, filename, file_data):
+    """FTP에 파일 업로드"""
+    try:
+        ftp = ftp_connect()
+        # PIN 디렉토리 없으면 생성
+        try:
+            ftp.cwd(pin)
+        except Exception:
+            ftp.mkd(pin)
+            ftp.cwd(pin)
+        ftp.storbinary(f'STOR {filename}', io.BytesIO(file_data))
+        ftp.quit()
+        print(f"  FTP uploaded: {pin}/{filename}")
+        return True
+    except Exception as e:
+        print(f"  FTP upload failed: {pin}/{filename} - {e}")
+        return False
+
+
+def ftp_delete_file(pin, filename):
+    """FTP에서 파일 삭제"""
+    try:
+        ftp = ftp_connect()
+        ftp.cwd(pin)
+        ftp.delete(filename)
+        ftp.quit()
+        print(f"  FTP deleted: {pin}/{filename}")
+        return True
+    except Exception as e:
+        print(f"  FTP delete failed: {pin}/{filename} - {e}")
+        return False
+
+
+def ftp_mkdir(dirname):
+    """FTP에 디렉토리 생성"""
+    try:
+        ftp = ftp_connect()
+        ftp.mkd(dirname)
+        ftp.quit()
+        print(f"  FTP mkdir: {dirname}")
+        return True
+    except Exception as e:
+        print(f"  FTP mkdir failed: {dirname} - {e}")
+        return False
+
+
+def ftp_rmdir(dirname):
+    """FTP에서 디렉토리 삭제 (내부 파일 포함)"""
+    try:
+        ftp = ftp_connect()
+        ftp.cwd(dirname)
+        # 디렉토리 내 파일 모두 삭제
+        files = []
+        ftp.retrlines('NLST', files.append)
+        for f in files:
+            if f not in ('.', '..'):
+                try:
+                    ftp.delete(f)
+                except Exception:
+                    pass
+        ftp.cwd('..')
+        ftp.rmd(dirname)
+        ftp.quit()
+        print(f"  FTP rmdir: {dirname}")
+        return True
+    except Exception as e:
+        print(f"  FTP rmdir failed: {dirname} - {e}")
+        return False
+
+
+def sync_ftp(target_pin=None):
+    AUDIO_CACHE_DIR.mkdir(exist_ok=True)
+    ftp = ftp_connect()
     total_downloaded = 0
     total_deleted = 0
     remote_dirs = []
@@ -492,15 +581,25 @@ def sync_ftp(target_pin=None):
         for name, size in remote_files.items():
             if name not in local_files or local_files[name] != size:
                 local_path = local_pin_dir / name
-                with open(local_path, 'wb') as f:
-                    ftp.retrbinary(f'RETR {name}', f.write)
-                total_downloaded += 1
-                print(f"  Downloaded: {pin_dir_name}/{name}")
-        for name in local_files:
+                tmp_path = local_path.with_suffix('.tmp')
+                try:
+                    with open(tmp_path, 'wb') as f:
+                        ftp.retrbinary(f'RETR {name}', f.write)
+                    tmp_path.rename(local_path)
+                    total_downloaded += 1
+                    print(f"  Downloaded: {pin_dir_name}/{name}")
+                except Exception as e:
+                    print(f"  Download failed: {pin_dir_name}/{name} - {e}")
+                    if tmp_path.exists():
+                        tmp_path.unlink()
+        for name in list(local_files.keys()):
             if name not in remote_files:
-                (local_pin_dir / name).unlink()
-                total_deleted += 1
-                print(f"  Deleted: {pin_dir_name}/{name}")
+                try:
+                    (local_pin_dir / name).unlink()
+                    total_deleted += 1
+                    print(f"  Deleted: {pin_dir_name}/{name}")
+                except Exception as e:
+                    print(f"  Delete failed: {pin_dir_name}/{name} - {e}")
         ftp.cwd('..')
     ftp.quit()
     return f"{total_downloaded} downloaded, {total_deleted} deleted"
