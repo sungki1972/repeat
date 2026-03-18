@@ -12,6 +12,7 @@ import io
 import secrets
 import time
 import shutil
+import threading
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from ftplib import FTP
 from pathlib import Path
@@ -321,6 +322,7 @@ class RequestHandler(SimpleHTTPRequestHandler):
 
     def handle_file_list(self, params):
         pin = params.get('pin', [''])[0].strip()
+        sub = params.get('path', [''])[0].strip()
         if not pin:
             self.send_json([])
             return
@@ -328,17 +330,27 @@ class RequestHandler(SimpleHTTPRequestHandler):
         if not pin_dir.is_dir():
             self.send_json([])
             return
-        files = []
-        for f in pin_dir.iterdir():
-            if f.suffix.lower() in ['.m4a', '.mp3']:
+        # 서브폴더 경로 검증
+        if sub:
+            target = (pin_dir / sub).resolve()
+            if not str(target).startswith(str(pin_dir.resolve())) or not target.is_dir():
+                self.send_json([])
+                return
+        else:
+            target = pin_dir
+        items = []
+        for f in sorted(target.iterdir()):
+            if f.is_dir():
+                items.append({'type': 'folder', 'name': f.name})
+            elif f.suffix.lower() in ['.m4a', '.mp3']:
                 stat = f.stat()
-                files.append({
+                items.append({
+                    'type': 'file',
                     'name': f.name,
                     'size': stat.st_size,
                     'modified': datetime.fromtimestamp(stat.st_mtime).isoformat()
                 })
-        files.sort(key=lambda x: x['name'])
-        self.send_json(files)
+        self.send_json(items)
 
     def handle_sync(self, params):
         pin = params.get('pin', [''])[0].strip()
@@ -349,7 +361,11 @@ class RequestHandler(SimpleHTTPRequestHandler):
             self.send_json({'success': False, 'error': str(e)}, 500)
 
     def handle_audio_request(self, pin, filename):
-        file_path = AUDIO_CACHE_DIR / pin / unquote(filename)
+        file_path = (AUDIO_CACHE_DIR / pin / unquote(filename)).resolve()
+        # 경로 탈출 방지
+        if not str(file_path).startswith(str((AUDIO_CACHE_DIR / pin).resolve())):
+            self.send_error(403, 'Forbidden')
+            return
         if not file_path.exists():
             self.send_error(404, 'File not found')
             return
@@ -418,17 +434,25 @@ class RequestHandler(SimpleHTTPRequestHandler):
         if not filename.lower().endswith(('.m4a', '.mp3')):
             self.send_json({'success': False, 'error': 'M4A 또는 MP3 파일만 가능합니다'}, 400)
             return
-        save_path = pin_dir / filename
+        folder = fs.getvalue('folder', '').strip()
+        # 폴더 경로 보안 검증
+        if folder:
+            target_dir = (pin_dir / folder).resolve()
+            if not str(target_dir).startswith(str(pin_dir.resolve())):
+                self.send_json({'success': False, 'error': '잘못된 경로입니다'}, 400)
+                return
+            target_dir.mkdir(parents=True, exist_ok=True)
+        else:
+            target_dir = pin_dir
+
+        save_path = target_dir / filename
         file_data = file_item.file.read()
         with open(save_path, 'wb') as f:
             f.write(file_data)
-        print(f"  Uploaded: {pin}/{filename} ({save_path.stat().st_size} bytes)")
-        # FTP에도 업로드
-        ftp_ok = ftp_upload(pin, filename, file_data)
-        msg = f'{filename} 업로드 완료'
-        if not ftp_ok:
-            msg += ' (FTP 동기화 실패 - 로컬에만 저장됨)'
-        self.send_json({'success': True, 'message': msg})
+        print(f"  Uploaded: {pin}/{folder + '/' if folder else ''}{filename} ({save_path.stat().st_size} bytes)")
+        # 로컬 저장 후 즉시 응답, FTP는 백그라운드
+        self.send_json({'success': True, 'message': f'{filename} 업로드 완료'})
+        threading.Thread(target=ftp_upload, args=(pin, filename, file_data), daemon=True).start()
 
     def handle_delete(self):
         data = self.read_json_body()
@@ -436,22 +460,28 @@ class RequestHandler(SimpleHTTPRequestHandler):
             return
         pin = data.get('pin', '').strip()
         filename = data.get('filename', '').strip()
+        folder = data.get('folder', '').strip()
         if not pin or not filename:
             self.send_json({'success': False, 'error': 'PIN과 파일명이 필요합니다'}, 400)
             return
         safe_name = Path(filename).name
-        file_path = AUDIO_CACHE_DIR / pin / safe_name
+        pin_dir = AUDIO_CACHE_DIR / pin
+        if folder:
+            target_dir = (pin_dir / folder).resolve()
+            if not str(target_dir).startswith(str(pin_dir.resolve())):
+                self.send_json({'success': False, 'error': '잘못된 경로입니다'}, 400)
+                return
+        else:
+            target_dir = pin_dir
+        file_path = target_dir / safe_name
         if not file_path.exists():
             self.send_json({'success': False, 'error': '파일을 찾을 수 없습니다'}, 404)
             return
         file_path.unlink()
-        print(f"  Deleted: {pin}/{safe_name}")
-        # FTP에서도 삭제
-        ftp_ok = ftp_delete_file(pin, safe_name)
-        msg = f'{safe_name} 삭제 완료'
-        if not ftp_ok:
-            msg += ' (FTP 동기화 실패 - 로컬에서만 삭제됨)'
-        self.send_json({'success': True, 'message': msg})
+        print(f"  Deleted: {pin}/{folder + '/' if folder else ''}{safe_name}")
+        # 로컬 삭제 후 즉시 응답, FTP는 백그라운드
+        self.send_json({'success': True, 'message': f'{safe_name} 삭제 완료'})
+        threading.Thread(target=ftp_delete_file, args=(pin, safe_name), daemon=True).start()
 
     # ===== 유틸 =====
 
@@ -479,7 +509,7 @@ class RequestHandler(SimpleHTTPRequestHandler):
 def ftp_connect():
     """FTP 연결 생성"""
     ftp = FTP()
-    ftp.connect(FTP_CONFIG['host'], FTP_CONFIG['port'])
+    ftp.connect(FTP_CONFIG['host'], FTP_CONFIG['port'], timeout=10)
     ftp.login(FTP_CONFIG['user'], FTP_CONFIG['pass'])
     ftp.cwd(FTP_CONFIG['path'])
     return ftp

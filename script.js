@@ -17,6 +17,10 @@ class App {
         this.currentPin = null;
         this.player = null;
 
+        // DOM 참조는 항상 초기화
+        this.loginSection = document.getElementById('loginSection');
+        this.mainSection = document.getElementById('mainSection');
+
         // F5 새로고침 시 로그인 유지
         const savedPin = sessionStorage.getItem('violin_pin');
         if (savedPin) {
@@ -29,8 +33,6 @@ class App {
     }
 
     initLogin() {
-        this.loginSection = document.getElementById('loginSection');
-        this.mainSection = document.getElementById('mainSection');
         this.pinInputs = document.querySelectorAll('.pin-input');
         this.pinError = document.getElementById('pinError');
         this.loginCard = document.getElementById('loginCard');
@@ -220,6 +222,7 @@ class AudioPlayer {
         // 상태
         this.files = [];
         this.currentFile = null;
+        this.currentPath = '';  // 현재 서브폴더 경로
         this.waveformData = null;
         this.audioContext = null;
         this.loopStart = 0;
@@ -375,7 +378,9 @@ class AudioPlayer {
 
     async loadFiles() {
         try {
-            const res = await fetch(`/api/files?pin=${this.pin}`);
+            let url = `/api/files?pin=${this.pin}`;
+            if (this.currentPath) url += `&path=${encodeURIComponent(this.currentPath)}`;
+            const res = await fetch(url);
             this.files = await res.json();
             this.renderFileList();
         } catch {
@@ -384,13 +389,36 @@ class AudioPlayer {
     }
 
     renderFileList() {
-        if (this.files.length === 0) {
+        const folders = this.files.filter(f => f.type === 'folder');
+        const files = this.files.filter(f => f.type !== 'folder');
+
+        if (this.files.length === 0 && !this.currentPath) {
             this.fileList.innerHTML = '<div class="empty-msg">연습곡이 없습니다<br><small>위의 업로드 버튼으로 추가하세요</small></div>';
             this.fileCount.textContent = '';
             return;
         }
-        this.fileCount.textContent = `${this.files.length}곡`;
-        this.fileList.innerHTML = this.files.map(f => `
+
+        this.fileCount.textContent = files.length > 0 ? `${files.length}곡` : '';
+
+        let html = '';
+
+        // 뒤로가기 버튼
+        if (this.currentPath) {
+            html += `<div class="file-item folder-back" data-action="back">
+                <span class="fi-name"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="vertical-align:middle;margin-right:6px"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>뒤로가기</span>
+            </div>`;
+        }
+
+        // 폴더 목록
+        html += folders.map(f => `
+            <div class="file-item folder-item" data-folder="${f.name}">
+                <span class="fi-name"><svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16" style="vertical-align:middle;margin-right:6px;color:var(--pri)"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>${f.name}</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="color:var(--t3)"><path d="M9 18l6-6-6-6"/></svg>
+            </div>
+        `).join('');
+
+        // 파일 목록
+        html += files.map(f => `
             <div class="file-item" data-name="${f.name}">
                 <span class="fi-name">${this.fmtName(f.name)}</span>
                 <span class="fi-size">${this.fmtSize(f.size)}</span>
@@ -402,8 +430,34 @@ class AudioPlayer {
             </div>
         `).join('');
 
-        this.fileList.querySelectorAll('.file-item').forEach(item => {
-            // 파일 선택 (삭제 버튼 제외)
+        if (!html) {
+            html = '<div class="empty-msg">이 폴더에 파일이 없습니다</div>';
+        }
+
+        this.fileList.innerHTML = html;
+
+        // 뒤로가기
+        const backItem = this.fileList.querySelector('.folder-back');
+        if (backItem) {
+            backItem.addEventListener('click', () => {
+                const parts = this.currentPath.split('/');
+                parts.pop();
+                this.currentPath = parts.join('/');
+                this.loadFiles();
+            });
+        }
+
+        // 폴더 클릭
+        this.fileList.querySelectorAll('.folder-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const folder = item.dataset.folder;
+                this.currentPath = this.currentPath ? `${this.currentPath}/${folder}` : folder;
+                this.loadFiles();
+            });
+        });
+
+        // 파일 선택 (삭제 버튼 제외)
+        this.fileList.querySelectorAll('.file-item:not(.folder-item):not(.folder-back)').forEach(item => {
             item.addEventListener('click', (e) => {
                 if (e.target.closest('.fi-del')) return;
                 this.loadTrack(item.dataset.name);
@@ -433,6 +487,7 @@ class AudioPlayer {
             const fd = new FormData();
             fd.append('pin', this.pin);
             fd.append('file', file);
+            if (this.currentPath) fd.append('folder', this.currentPath);
             try {
                 const res = await fetch('/api/upload', { method: 'POST', body: fd });
                 const r = await res.json();
@@ -458,7 +513,7 @@ class AudioPlayer {
             const res = await fetch('/api/delete', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ pin: this.pin, filename })
+                body: JSON.stringify({ pin: this.pin, filename, folder: this.currentPath || '' })
             });
             const r = await res.json();
             if (r.success) {
@@ -490,7 +545,8 @@ class AudioPlayer {
 
     async loadTrack(filename) {
         this.currentFile = filename;
-        const url = `/audio/${this.pin}/${encodeURIComponent(filename)}`;
+        const path = this.currentPath ? `${this.currentPath}/${filename}` : filename;
+        const url = `/audio/${this.pin}/${encodeURIComponent(path)}`;
         this.trackNameOverlay.textContent = this.fmtName(filename);
 
         // 플레이어 먼저 표시 (파형 버그 수정)

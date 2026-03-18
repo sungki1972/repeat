@@ -365,6 +365,22 @@ kbd {
     color: #ff6666;
 }
 
+.folder-item {
+    background: rgba(0, 229, 199, 0.03);
+}
+.folder-item:hover {
+    background: rgba(0, 229, 199, 0.1);
+}
+
+.folder-back {
+    color: var(--t2);
+    font-size: 0.82rem;
+    border-bottom: 1px solid rgba(0, 229, 199, 0.08);
+}
+.folder-back:hover {
+    background: rgba(0, 229, 199, 0.08);
+}
+
 .empty-msg {
     padding: 28px 16px;
     text-align: center;
