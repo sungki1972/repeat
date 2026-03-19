@@ -452,7 +452,7 @@ class RequestHandler(SimpleHTTPRequestHandler):
         print(f"  Uploaded: {pin}/{folder + '/' if folder else ''}{filename} ({save_path.stat().st_size} bytes)")
         # 로컬 저장 후 즉시 응답, FTP는 백그라운드
         self.send_json({'success': True, 'message': f'{filename} 업로드 완료'})
-        threading.Thread(target=ftp_upload, args=(pin, filename, file_data), daemon=True).start()
+        threading.Thread(target=ftp_upload, args=(pin, filename, file_data, folder), daemon=True).start()
 
     def handle_delete(self):
         data = self.read_json_body()
@@ -481,7 +481,7 @@ class RequestHandler(SimpleHTTPRequestHandler):
         print(f"  Deleted: {pin}/{folder + '/' if folder else ''}{safe_name}")
         # 로컬 삭제 후 즉시 응답, FTP는 백그라운드
         self.send_json({'success': True, 'message': f'{safe_name} 삭제 완료'})
-        threading.Thread(target=ftp_delete_file, args=(pin, safe_name), daemon=True).start()
+        threading.Thread(target=ftp_delete_file, args=(pin, safe_name, folder), daemon=True).start()
 
     # ===== 유틸 =====
 
@@ -515,7 +515,7 @@ def ftp_connect():
     return ftp
 
 
-def ftp_upload(pin, filename, file_data):
+def ftp_upload(pin, filename, file_data, folder=''):
     """FTP에 파일 업로드"""
     try:
         ftp = ftp_connect()
@@ -525,26 +525,38 @@ def ftp_upload(pin, filename, file_data):
         except Exception:
             ftp.mkd(pin)
             ftp.cwd(pin)
+        # 서브폴더 경로 탐색/생성
+        if folder:
+            for part in folder.split('/'):
+                if not part:
+                    continue
+                try:
+                    ftp.cwd(part)
+                except Exception:
+                    ftp.mkd(part)
+                    ftp.cwd(part)
         ftp.storbinary(f'STOR {filename}', io.BytesIO(file_data))
         ftp.quit()
-        print(f"  FTP uploaded: {pin}/{filename}")
+        print(f"  FTP uploaded: {pin}/{folder + '/' if folder else ''}{filename}")
         return True
     except Exception as e:
-        print(f"  FTP upload failed: {pin}/{filename} - {e}")
+        print(f"  FTP upload failed: {pin}/{folder + '/' if folder else ''}{filename} - {e}")
         return False
 
 
-def ftp_delete_file(pin, filename):
+def ftp_delete_file(pin, filename, folder=''):
     """FTP에서 파일 삭제"""
     try:
         ftp = ftp_connect()
         ftp.cwd(pin)
+        if folder:
+            ftp.cwd(folder)
         ftp.delete(filename)
         ftp.quit()
-        print(f"  FTP deleted: {pin}/{filename}")
+        print(f"  FTP deleted: {pin}/{folder + '/' if folder else ''}{filename}")
         return True
     except Exception as e:
-        print(f"  FTP delete failed: {pin}/{filename} - {e}")
+        print(f"  FTP delete failed: {pin}/{folder + '/' if folder else ''}{filename} - {e}")
         return False
 
 
@@ -602,49 +614,82 @@ def sync_ftp(target_pin=None):
                     remote_dirs.append(dirname)
     for pin_dir_name in remote_dirs:
         local_pin_dir = AUDIO_CACHE_DIR / pin_dir_name
-        local_pin_dir.mkdir(exist_ok=True)
-        remote_files = {}
         ftp.cwd(pin_dir_name)
-        ftp.retrlines('LIST', lambda line, rf=remote_files: parse_ftp_list(line, rf))
-        local_files = {f.name: f.stat().st_size for f in local_pin_dir.iterdir()
-                       if f.suffix.lower() in ['.m4a', '.mp3']}
-        for name, size in remote_files.items():
-            if name not in local_files or local_files[name] != size:
-                local_path = local_pin_dir / name
-                tmp_path = local_path.with_suffix('.tmp')
-                try:
-                    with open(tmp_path, 'wb') as f:
-                        ftp.retrbinary(f'RETR {name}', f.write)
-                    tmp_path.rename(local_path)
-                    total_downloaded += 1
-                    print(f"  Downloaded: {pin_dir_name}/{name}")
-                except Exception as e:
-                    print(f"  Download failed: {pin_dir_name}/{name} - {e}")
-                    if tmp_path.exists():
-                        tmp_path.unlink()
-        for name in list(local_files.keys()):
-            if name not in remote_files:
-                try:
-                    (local_pin_dir / name).unlink()
-                    total_deleted += 1
-                    print(f"  Deleted: {pin_dir_name}/{name}")
-                except Exception as e:
-                    print(f"  Delete failed: {pin_dir_name}/{name} - {e}")
+        d, dl = sync_ftp_dir(ftp, pin_dir_name, local_pin_dir)
+        total_downloaded += d
+        total_deleted += dl
         ftp.cwd('..')
     ftp.quit()
     return f"{total_downloaded} downloaded, {total_deleted} deleted"
 
 
-def parse_ftp_list(line, result):
-    parts = line.split()
-    if len(parts) >= 9:
+def sync_ftp_dir(ftp, remote_path, local_dir):
+    """FTP 디렉토리를 재귀적으로 동기화"""
+    local_dir.mkdir(exist_ok=True)
+    entries = []
+    ftp.retrlines('LIST', entries.append)
+
+    remote_files = {}
+    remote_dirs = []
+    for line in entries:
+        parts = line.split()
+        if len(parts) < 9:
+            continue
         name = ' '.join(parts[8:])
-        if name.lower().endswith(('.m4a', '.mp3')):
+        if name in ('.', '..'):
+            continue
+        if line.startswith('d'):
+            remote_dirs.append(name)
+        elif name.lower().endswith(('.m4a', '.mp3')):
             try:
-                size = int(parts[4])
-                result[name] = size
+                remote_files[name] = int(parts[4])
             except ValueError:
                 pass
+
+    downloaded = 0
+    deleted = 0
+
+    # 파일 동기화
+    local_files = {f.name: f.stat().st_size for f in local_dir.iterdir()
+                   if f.is_file() and f.suffix.lower() in ['.m4a', '.mp3']}
+    for name, size in remote_files.items():
+        if name not in local_files or local_files[name] != size:
+            local_path = local_dir / name
+            tmp_path = local_path.with_suffix('.tmp')
+            try:
+                with open(tmp_path, 'wb') as f:
+                    ftp.retrbinary(f'RETR {name}', f.write)
+                tmp_path.rename(local_path)
+                downloaded += 1
+                print(f"  Downloaded: {remote_path}/{name}")
+            except Exception as e:
+                print(f"  Download failed: {remote_path}/{name} - {e}")
+                if tmp_path.exists():
+                    tmp_path.unlink()
+    for name in list(local_files.keys()):
+        if name not in remote_files:
+            try:
+                (local_dir / name).unlink()
+                deleted += 1
+                print(f"  Deleted: {remote_path}/{name}")
+            except Exception as e:
+                print(f"  Delete failed: {remote_path}/{name} - {e}")
+
+    # 서브디렉토리 재귀 동기화
+    for dirname in remote_dirs:
+        ftp.cwd(dirname)
+        d, dl = sync_ftp_dir(ftp, f"{remote_path}/{dirname}", local_dir / dirname)
+        downloaded += d
+        deleted += dl
+        ftp.cwd('..')
+
+    # 로컬에만 있는 서브디렉토리 제거
+    for d in local_dir.iterdir():
+        if d.is_dir() and d.name not in remote_dirs:
+            shutil.rmtree(d)
+            print(f"  Removed local dir: {remote_path}/{d.name}")
+
+    return downloaded, deleted
 
 
 def start_server():
