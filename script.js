@@ -202,6 +202,7 @@ class AudioPlayer {
 
         this.setLoopBtn = document.getElementById('setLoopBtn');
         this.resetLoopBtn = document.getElementById('resetLoopBtn');
+        this.downloadBtn = document.getElementById('downloadBtn');
         this.loopRegion = document.getElementById('loopRegion');
         this.markerA = document.getElementById('markerA');
         this.markerB = document.getElementById('markerB');
@@ -270,6 +271,7 @@ class AudioPlayer {
         // 루프
         this.setLoopBtn.addEventListener('click', () => this.toggleLoop());
         this.resetLoopBtn.addEventListener('click', () => this.resetLoop());
+        this.downloadBtn.addEventListener('click', () => this.downloadTrimmed());
         this.setupMarkerDrag();
 
         // 웨이브폼 클릭
@@ -700,6 +702,54 @@ class AudioPlayer {
         this.setLoopBtn.classList.remove('active');
         this.updateMarkers();
         this.updateTimeDisplay();
+    }
+
+    async downloadTrimmed() {
+        if (!this.currentFile || !this.audio.duration) {
+            showToast('먼저 곡을 선택하세요');
+            return;
+        }
+        // 버튼 비활성화
+        this.downloadBtn.disabled = true;
+        const origHTML = this.downloadBtn.innerHTML;
+        this.downloadBtn.textContent = '변환 중...';
+
+        try {
+            const res = await fetch('/api/trim', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    pin: this.pin,
+                    filename: this.currentFile,
+                    folder: this.currentPath || '',
+                    start: this.loopStart,
+                    end: this.loopEnd
+                })
+            });
+
+            if (!res.ok) {
+                const err = await res.json();
+                showToast(err.error || '변환 실패', 3000);
+                return;
+            }
+
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            const baseName = this.currentFile.replace(/\.(m4a|mp3)$/i, '');
+            a.href = url;
+            a.download = baseName + '_A-B.mp3';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showToast('다운로드 완료');
+        } catch (err) {
+            showToast('서버 연결 실패', 3000);
+        } finally {
+            this.downloadBtn.disabled = false;
+            this.downloadBtn.innerHTML = origHTML;
+        }
     }
 
     updateMarkers() {

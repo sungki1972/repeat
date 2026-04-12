@@ -12,11 +12,12 @@ import io
 import secrets
 import time
 import shutil
+import subprocess
 import threading
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from ftplib import FTP
 from pathlib import Path
-from urllib.parse import unquote, parse_qs, urlparse
+from urllib.parse import unquote, parse_qs, urlparse, quote
 from datetime import datetime
 
 # 설정
@@ -155,6 +156,9 @@ class RequestHandler(SimpleHTTPRequestHandler):
             return
         elif path == '/api/admin/memo':
             self.handle_admin_update_memo()
+            return
+        elif path == '/api/trim':
+            self.handle_trim()
             return
 
         self.send_error(404)
@@ -482,6 +486,98 @@ class RequestHandler(SimpleHTTPRequestHandler):
         # 로컬 삭제 후 즉시 응답, FTP는 백그라운드
         self.send_json({'success': True, 'message': f'{safe_name} 삭제 완료'})
         threading.Thread(target=ftp_delete_file, args=(pin, safe_name, folder), daemon=True).start()
+
+    def handle_trim(self):
+        """A-B 구간을 잘라 MP3로 반환"""
+        data = self.read_json_body()
+        if data is None:
+            return
+
+        pin = data.get('pin', '').strip()
+        filename = data.get('filename', '').strip()
+        folder = data.get('folder', '').strip()
+
+        if not pin or not filename:
+            self.send_json({'success': False, 'error': 'PIN과 파일명이 필요합니다'}, 400)
+            return
+
+        # start / end 파싱
+        try:
+            start = float(data.get('start', 0))
+            end = float(data.get('end', 0))
+        except (TypeError, ValueError):
+            self.send_json({'success': False, 'error': 'start/end 값이 올바르지 않습니다'}, 400)
+            return
+
+        if start < 0 or end <= start or (end - start) > 600:
+            self.send_json({'success': False, 'error': '구간이 올바르지 않습니다 (최대 600초)'}, 400)
+            return
+
+        # 경로 보안 검증
+        safe_name = Path(filename).name
+        pin_dir = AUDIO_CACHE_DIR / pin
+        if folder:
+            target_dir = (pin_dir / folder).resolve()
+            if not str(target_dir).startswith(str(pin_dir.resolve())):
+                self.send_json({'success': False, 'error': '잘못된 경로입니다'}, 400)
+                return
+        else:
+            target_dir = pin_dir
+
+        file_path = target_dir / safe_name
+        if not file_path.exists():
+            self.send_json({'success': False, 'error': '파일을 찾을 수 없습니다'}, 404)
+            return
+
+        # ffmpeg로 구간 추출
+        try:
+            result = subprocess.run(
+                [
+                    'ffmpeg', '-y',
+                    '-i', str(file_path),
+                    '-ss', str(start),
+                    '-to', str(end),
+                    '-vn',
+                    '-acodec', 'libmp3lame',
+                    '-q:a', '2',
+                    '-f', 'mp3',
+                    'pipe:1',
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=30,
+            )
+        except subprocess.TimeoutExpired:
+            self.send_json({'success': False, 'error': 'ffmpeg 처리 시간이 초과되었습니다'}, 500)
+            return
+        except FileNotFoundError:
+            self.send_json({'success': False, 'error': 'ffmpeg가 설치되어 있지 않습니다'}, 500)
+            return
+        except Exception as e:
+            self.send_json({'success': False, 'error': f'ffmpeg 실행 오류: {e}'}, 500)
+            return
+
+        if result.returncode != 0:
+            err_msg = result.stderr.decode('utf-8', errors='replace')[-200:]
+            self.send_json({'success': False, 'error': f'ffmpeg 오류: {err_msg}'}, 500)
+            return
+
+        # 다운로드 파일명 생성: 원본이름_A-B.mp3
+        stem = Path(safe_name).stem
+        out_name = f'{stem}_A-B.mp3'
+        # UTF-8 인코딩 처리
+        encoded_name = quote(out_name)
+
+        audio_data = result.stdout
+        self.send_response(200)
+        self.send_header('Content-Type', 'audio/mpeg')
+        self.send_header('Content-Length', len(audio_data))
+        self.send_header(
+            'Content-Disposition',
+            f"attachment; filename=\"{out_name}\"; filename*=UTF-8''{encoded_name}"
+        )
+        self.end_headers()
+        self.wfile.write(audio_data)
 
     # ===== 유틸 =====
 
