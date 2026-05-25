@@ -296,97 +296,215 @@ kbd {
     border: 1px solid rgba(0, 229, 199, 0.15);
 }
 
-.upload-label:hover { background: rgba(0, 229, 199, 0.18); }
+.upload-label:hover { background: rgba(0, 229, 199, 0.18); transform: translateY(-1px); }
+.upload-label:active { transform: translateY(0) scale(0.97); }
 
 .file-list {
-    max-height: 200px;
+    max-height: 640px;
     overflow-y: auto;
     scrollbar-width: thin;
     scrollbar-color: var(--pri-dk) transparent;
+    padding: 4px 0;
 }
 
 .file-list::-webkit-scrollbar { width: 4px; }
 .file-list::-webkit-scrollbar-thumb { background: var(--pri-dk); border-radius: 2px; }
 
+/* ===== 공통 아이템 컨테이너 ===== */
 .file-item {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    padding: 11px 14px;
+    gap: 10px;
+    padding: 10px 14px;
     cursor: pointer;
-    transition: background 0.15s;
-    border-bottom: 1px solid rgba(0, 229, 199, 0.04);
+    transition: background 0.18s ease, transform 0.15s ease;
+    position: relative;
+    animation: listItemIn 0.35s cubic-bezier(0.2, 0.9, 0.3, 1) both;
 }
 
-.file-item:last-child { border-bottom: none; }
-.file-item:hover { background: rgba(0, 229, 199, 0.07); }
-.file-item.active { background: rgba(0, 229, 199, 0.12); }
+@keyframes listItemIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: none; }
+}
+
+.file-item:hover { background: rgba(255, 255, 255, 0.03); }
+.file-item:active { transform: scale(0.995); }
+
+/* ===== 좌측 아이콘 뱃지 ===== */
+.fi-icon {
+    flex-shrink: 0;
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.file-item:hover .fi-icon { transform: scale(1.05); }
+
+/* 폴더 아이콘 (따뜻한 앰버 톤) */
+.folder-item .fi-icon {
+    background: linear-gradient(135deg, rgba(255, 180, 90, 0.18), rgba(255, 140, 60, 0.1));
+    color: #ffb96a;
+    box-shadow: inset 0 0 0 1px rgba(255, 180, 90, 0.2);
+}
+
+/* 파일 아이콘 (시그니처 틸 톤) */
+.file-item:not(.folder-item):not(.folder-back) .fi-icon {
+    background: linear-gradient(135deg, rgba(0, 229, 199, 0.18), rgba(0, 184, 156, 0.08));
+    color: var(--pri);
+    box-shadow: inset 0 0 0 1px rgba(0, 229, 199, 0.18);
+}
+
+.file-item.active .fi-icon {
+    background: linear-gradient(135deg, var(--pri), var(--pri-dk));
+    color: #0a1929;
+    box-shadow: 0 2px 12px rgba(0, 229, 199, 0.5);
+    animation: iconPulse 1.8s ease-in-out infinite;
+}
+
+@keyframes iconPulse {
+    0%, 100% { box-shadow: 0 2px 12px rgba(0, 229, 199, 0.5); }
+    50% { box-shadow: 0 2px 18px rgba(0, 229, 199, 0.8); }
+}
+
+/* ===== 중앙 메타: 이름 + 부가정보 ===== */
+.fi-meta {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
 
 .fi-name {
-    font-size: 0.85rem;
+    display: block;
+    font-size: 0.9rem;
+    font-weight: 400;
+    color: var(--t1);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    flex: 1;
-    margin-right: 8px;
+    line-height: 1.3;
 }
 
-.fi-size {
+.folder-item .fi-name {
+    font-weight: 500;
+    color: #ffc98a;
+    letter-spacing: -0.01em;
+}
+
+.file-item.active .fi-name { color: var(--pri-lt); font-weight: 500; }
+
+.fi-sub {
     font-size: 0.68rem;
     color: var(--t3);
     font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.02em;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.fi-sub .tag {
+    text-transform: uppercase;
+    font-size: 0.62rem;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: rgba(0, 229, 199, 0.1);
+    color: var(--pri);
+    letter-spacing: 0.08em;
+}
+
+.folder-item .fi-sub .tag {
+    background: rgba(255, 180, 90, 0.12);
+    color: #ffb96a;
+}
+
+/* ===== 우측 액션 ===== */
+.fi-chev {
     flex-shrink: 0;
+    color: var(--t3);
+    display: flex;
+    transition: transform 0.2s ease, color 0.2s ease;
+}
+
+.folder-item:hover .fi-chev {
+    transform: translateX(3px);
+    color: #ffb96a;
 }
 
 .fi-del {
-    width: 28px;
-    height: 28px;
+    width: 30px;
+    height: 30px;
     border: none;
     background: transparent;
     color: var(--t3);
-    border-radius: 6px;
+    border-radius: 7px;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    margin-left: 4px;
-    transition: all 0.15s;
+    transition: all 0.18s ease;
     opacity: 0;
 }
 
 .file-item:hover .fi-del,
-.file-item:active .fi-del {
+.file-item.active .fi-del {
     opacity: 1;
 }
 
 .fi-del:hover {
     background: rgba(255, 80, 80, 0.15);
-    color: #ff6666;
+    color: #ff7777;
+    transform: scale(1.08);
 }
+.fi-del:active { transform: scale(0.92); }
 
-.folder-item {
-    background: rgba(0, 229, 199, 0.03);
-}
-.folder-item:hover {
-    background: rgba(0, 229, 199, 0.1);
-}
-
+/* ===== 뒤로가기 ===== */
 .folder-back {
     color: var(--t2);
     font-size: 0.82rem;
     border-bottom: 1px solid rgba(0, 229, 199, 0.08);
+    margin-bottom: 4px;
 }
-.folder-back:hover {
-    background: rgba(0, 229, 199, 0.08);
+.folder-back .fi-icon {
+    background: rgba(127, 184, 216, 0.08);
+    color: var(--t2);
+    box-shadow: inset 0 0 0 1px rgba(127, 184, 216, 0.12);
+}
+.folder-back:hover { background: rgba(127, 184, 216, 0.05); }
+.folder-back:hover .fi-icon { transform: translateX(-2px); }
+
+/* ===== 경로 표시 (breadcrumb) ===== */
+.path-crumb {
+    padding: 8px 14px 10px;
+    font-size: 0.72rem;
+    color: var(--t3);
+    font-family: 'JetBrains Mono', monospace;
+    border-bottom: 1px solid rgba(0, 229, 199, 0.06);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
 }
 
+.path-crumb svg { opacity: 0.6; flex-shrink: 0; }
+.path-crumb .crumb-home { color: var(--pri); }
+.path-crumb .crumb-seg { color: var(--t2); }
+.path-crumb .crumb-seg:last-of-type { color: var(--t1); font-weight: 500; }
+.path-crumb .crumb-div { color: var(--t3); opacity: 0.5; }
+
 .empty-msg {
-    padding: 28px 16px;
+    padding: 32px 16px;
     text-align: center;
     color: var(--t3);
     font-size: 0.85rem;
     line-height: 1.7;
+    animation: listItemIn 0.4s ease;
 }
 
 .empty-msg small { font-size: 0.75rem; opacity: 0.7; }
@@ -707,22 +825,83 @@ kbd {
    반응형
    ======================================== */
 
-@media (max-width: 480px) {
+@media (max-width: 600px) {
     .main-section { padding: 8px; gap: 10px; }
     .header { padding: 10px 12px; }
     .header-title { font-size: 1rem; }
-    .player-section { padding: 12px; }
-    .waveform-container { height: 90px; }
-    .play-btn { width: 58px; height: 58px; }
-    .ctrl-btn { width: 42px; height: 42px; }
+    .header-btn { width: 38px; height: 38px; }
+
+    .section-header { padding: 10px 12px; }
+    .section-header h2 { font-size: 0.82rem; }
+
+    .file-list { max-height: 560px; }
+    .file-item { padding: 12px 12px; gap: 10px; }
+    .fi-icon { width: 36px; height: 36px; border-radius: 10px; }
+    .fi-name { font-size: 0.88rem; }
+    .fi-sub { font-size: 0.66rem; }
+
+    .path-crumb { padding: 10px 12px; font-size: 0.68rem; }
+
+    .player-section { padding: 12px; gap: 12px; }
+    .waveform-container { height: 92px; }
+    .play-btn { width: 62px; height: 62px; }
+    .ctrl-btn { width: 48px; height: 48px; }
+    .controls { gap: 20px; }
+
+    .options-bar { gap: 6px; justify-content: center; }
+    .opt-btn { padding: 8px 12px; font-size: 0.75rem; min-height: 36px; }
+    .speed-btn { padding: 7px 10px; font-size: 0.72rem; min-height: 36px; }
+    .speed-group { margin-left: 0; }
+
+    .vol-group { margin-top: 4px; }
+    #volumeSlider::-webkit-slider-thumb { width: 22px; height: 22px; }
+    #volumeSlider::-moz-range-thumb { width: 22px; height: 22px; }
+
     .login-card { padding: 36px 24px 30px; }
-    .pin-input { width: 46px; height: 54px; font-size: 1.4rem; }
-    .help-content { font-size: 0.68rem; }
+    .pin-input { width: 52px; height: 58px; font-size: 1.4rem; }
+    .pin-fields { gap: 12px; }
+    .help-content { font-size: 0.7rem; }
+
+    .loop-marker { width: 10px; }
+    .marker-label { font-size: 0.7rem; padding: 2px 8px; top: -24px; }
+
+    .upload-label { padding: 6px 12px; font-size: 0.75rem; }
+    .fi-del { opacity: 0.6; width: 36px; height: 36px; }
 }
 
+@media (max-width: 380px) {
+    .pin-input { width: 46px; height: 54px; }
+    .pin-fields { gap: 10px; }
+    .fi-icon { width: 32px; height: 32px; }
+    .fi-name { font-size: 0.84rem; }
+    .controls { gap: 16px; }
+    .header-title { font-size: 0.94rem; }
+    .speed-btn { padding: 6px 8px; font-size: 0.68rem; }
+    .opt-btn { padding: 7px 10px; font-size: 0.7rem; }
+}
+
+/* 터치 장치: 삭제버튼 항상 노출, 마커 폭 확대, 햅틱-like 압력 */
 @media (hover: none) {
-    .file-item:active { background: rgba(0, 229, 199, 0.12); }
-    .ctrl-btn:active, .speed-btn:active { transform: scale(0.93); }
-    .loop-marker { width: 12px; }
+    .file-item:active { background: rgba(0, 229, 199, 0.12); transform: scale(0.995); }
+    .ctrl-btn:active, .speed-btn:active, .opt-btn:active { transform: scale(0.93); }
+    .loop-marker { width: 14px; }
+    .marker-label { font-size: 0.72rem; padding: 2px 9px; }
     .fi-del { opacity: 0.6; }
+    .file-item:hover { background: transparent; }
+    .file-item:hover .fi-icon { transform: none; }
+
+    .play-btn { width: 66px; height: 66px; }
+    .ctrl-btn { width: 50px; height: 50px; }
+    #volumeSlider { height: 8px; }
+    #volumeSlider::-webkit-slider-thumb { width: 24px; height: 24px; }
+    #volumeSlider::-moz-range-thumb { width: 24px; height: 24px; }
+}
+
+/* 접근성: 모션 감소 */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
 }

@@ -318,8 +318,8 @@ class AudioPlayer {
                 this.togglePlay();
                 return;
             }
-            if (e.ctrlKey && e.key === 'ArrowLeft') { e.preventDefault(); this.skip(-10); return; }
-            if (e.ctrlKey && e.key === 'ArrowRight') { e.preventDefault(); this.skip(10); return; }
+            if (e.key === 'ArrowLeft') { e.preventDefault(); this.skip(-10); return; }
+            if (e.key === 'ArrowRight') { e.preventDefault(); this.skip(10); return; }
             if (e.ctrlKey && e.key === 'r') { e.preventDefault(); this.toggleLoop(); return; }
         });
     }
@@ -400,40 +400,78 @@ class AudioPlayer {
             return;
         }
 
-        this.fileCount.textContent = files.length > 0 ? `${files.length}곡` : '';
+        // 파일 수 + 폴더 수 표시
+        const countParts = [];
+        if (folders.length) countParts.push(`${folders.length}폴더`);
+        if (files.length) countParts.push(`${files.length}곡`);
+        this.fileCount.textContent = countParts.join(' · ');
+
+        // SVG 정의
+        const svgFolder = `<svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>`;
+        const svgMusic = `<svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>`;
+        const svgChev = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M9 18l6-6-6-6"/></svg>`;
+        const svgBack = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>`;
+        const svgTrash = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>`;
+        const svgHome = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>`;
 
         let html = '';
 
-        // 뒤로가기 버튼
+        // 경로 (breadcrumb)
         if (this.currentPath) {
-            html += `<div class="file-item folder-back" data-action="back">
-                <span class="fi-name"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="vertical-align:middle;margin-right:6px"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>뒤로가기</span>
+            const segs = this.currentPath.split('/');
+            const crumbParts = segs.map((s, i) => {
+                const last = i === segs.length - 1;
+                return `<span class="crumb-seg">${this.escapeHtml(s)}</span>${last ? '' : '<span class="crumb-div">/</span>'}`;
+            }).join('');
+            html += `<div class="path-crumb">
+                <span class="crumb-home">${svgHome}</span>
+                <span class="crumb-div">/</span>
+                ${crumbParts}
             </div>`;
         }
 
-        // 폴더 목록
+        // 뒤로가기
+        if (this.currentPath) {
+            html += `<div class="file-item folder-back" data-action="back" style="animation-delay:0ms">
+                <span class="fi-icon">${svgBack}</span>
+                <span class="fi-meta"><span class="fi-name">상위 폴더로</span></span>
+            </div>`;
+        }
+
+        let idx = 0;
+        const delayFor = () => `animation-delay:${Math.min(idx++ * 28, 320)}ms`;
+
+        // 폴더 목록 (이름만, 확장자 없음)
         html += folders.map(f => `
-            <div class="file-item folder-item" data-folder="${f.name}">
-                <span class="fi-name"><svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16" style="vertical-align:middle;margin-right:6px;color:var(--pri)"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>${f.name}</span>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="color:var(--t3)"><path d="M9 18l6-6-6-6"/></svg>
+            <div class="file-item folder-item" data-folder="${this.escapeAttr(f.name)}" style="${delayFor()}">
+                <span class="fi-icon">${svgFolder}</span>
+                <span class="fi-meta">
+                    <span class="fi-name">${this.escapeHtml(f.name)}</span>
+                    <span class="fi-sub"><span class="tag">폴더</span></span>
+                </span>
+                <span class="fi-chev">${svgChev}</span>
             </div>
         `).join('');
 
-        // 파일 목록
-        html += files.map(f => `
-            <div class="file-item" data-name="${f.name}">
-                <span class="fi-name">${this.fmtName(f.name)}</span>
-                <span class="fi-size">${this.fmtSize(f.size)}</span>
-                <button class="fi-del" data-name="${f.name}" title="삭제">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-                        <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
-                    </svg>
-                </button>
-            </div>
-        `).join('');
+        // 파일 목록 (확장자 태그로 노출 + 크기)
+        html += files.map(f => {
+            const ext = (f.name.match(/\.(m4a|mp3)$/i) || [,''])[1].toUpperCase();
+            return `
+            <div class="file-item" data-name="${this.escapeAttr(f.name)}" style="${delayFor()}">
+                <span class="fi-icon">${svgMusic}</span>
+                <span class="fi-meta">
+                    <span class="fi-name">${this.escapeHtml(this.fmtName(f.name))}</span>
+                    <span class="fi-sub">
+                        ${ext ? `<span class="tag">${ext}</span>` : ''}
+                        <span>${this.fmtSize(f.size)}</span>
+                    </span>
+                </span>
+                <button class="fi-del" data-name="${this.escapeAttr(f.name)}" title="삭제">${svgTrash}</button>
+            </div>`;
+        }).join('');
 
-        if (!html) {
-            html = '<div class="empty-msg">이 폴더에 파일이 없습니다</div>';
+        if (folders.length === 0 && files.length === 0) {
+            html += '<div class="empty-msg">이 폴더에 파일이 없습니다</div>';
         }
 
         this.fileList.innerHTML = html;
@@ -476,6 +514,11 @@ class AudioPlayer {
             });
         });
     }
+
+    escapeHtml(s) {
+        return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+    escapeAttr(s) { return this.escapeHtml(s); }
 
     async handleUpload(e) {
         const files = e.target.files;
