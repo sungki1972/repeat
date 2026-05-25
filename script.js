@@ -594,6 +594,10 @@ class AudioPlayer {
         const url = `/audio/${this.pin}/${encodeURIComponent(path)}`;
         this.trackNameOverlay.textContent = this.fmtName(filename);
 
+        // 이전 재생 정지 + 버튼 상태 즉시 동기화
+        this.audio.pause();
+        this.updatePlayBtn(false);
+
         // 플레이어 먼저 표시 (파형 버그 수정)
         this.playerSection.style.display = '';
         this.audio.src = url;
