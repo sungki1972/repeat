@@ -598,23 +598,46 @@ class AudioPlayer {
         this.audio.pause();
         this.updatePlayBtn(false);
 
-        // 플레이어 먼저 표시 (파형 버그 수정)
+        // 플레이어 먼저 표시
         this.playerSection.style.display = '';
-        this.audio.src = url;
-        this.audio.load();
 
-        // 2프레임 대기 후 캔버스 사이즈 확정
-        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-        this.resizeCanvas();
-        await this.generateWaveform(url);
-    }
-
-    async generateWaveform(url) {
+        // 웨이브폼 데이터를 먼저 fetch (한 번만 다운로드)
+        let audioBuf = null;
         try {
             const resp = await fetch(url);
-            const buf = await resp.arrayBuffer();
+            audioBuf = await resp.arrayBuffer();
+        } catch (err) {
+            console.error('Audio fetch error:', err);
+        }
+
+        // fetch한 데이터로 오디오 소스 설정 (네트워크 재요청 없음)
+        if (audioBuf) {
+            const blob = new Blob([audioBuf], { type: url.endsWith('.mp3') ? 'audio/mpeg' : 'audio/mp4' });
+            this.audio.src = URL.createObjectURL(blob);
+        } else {
+            this.audio.src = url;
+        }
+        this.audio.load();
+
+        // 오디오 재생 가능할 때까지 대기
+        await new Promise(r => {
+            const ready = () => { this.audio.removeEventListener('canplay', ready); r(); };
+            if (this.audio.readyState >= 3) r();
+            else this.audio.addEventListener('canplay', ready);
+        });
+
+        // 캔버스 사이즈 확정 후 웨이브폼 그리기
+        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+        this.resizeCanvas();
+        if (audioBuf) {
+            await this.generateWaveform(audioBuf);
+        }
+    }
+
+    async generateWaveform(arrayBuffer) {
+        try {
             if (!this.audioContext) this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            const ab = await this.audioContext.decodeAudioData(buf);
+            const ab = await this.audioContext.decodeAudioData(arrayBuffer.slice(0));
             const ch = ab.getChannelData(0);
             const N = 500, bs = Math.floor(ch.length / N);
             this.waveformData = [];
@@ -690,7 +713,13 @@ class AudioPlayer {
 
     // ===== 재생 =====
 
-    togglePlay() { this.audio.paused ? this.audio.play() : this.audio.pause(); }
+    togglePlay() {
+        if (this.audio.paused) {
+            this.audio.play().catch(() => {});
+        } else {
+            this.audio.pause();
+        }
+    }
 
     updatePlayBtn(playing) {
         this.playBtn.querySelector('.icon-play').style.display = playing ? 'none' : '';
