@@ -223,7 +223,7 @@ class AudioPlayer {
         // 상태
         this.files = [];
         this.currentFile = null;
-        this.currentPath = '';  // 현재 서브폴더 경로
+        this.currentPath = '';
         this.waveformData = null;
         this.audioContext = null;
         this.loopStart = 0;
@@ -232,6 +232,8 @@ class AudioPlayer {
         this.isDragging = false;
         this.dragTarget = null;
         this.isUploading = false;
+        this._loadId = 0;
+        this._currentBlobUrl = null;
 
         this.init();
     }
@@ -296,6 +298,10 @@ class AudioPlayer {
         this.logoutBtn.addEventListener('click', () => {
             this.audio.pause();
             this.audio.src = '';
+            if (this._currentBlobUrl) {
+                URL.revokeObjectURL(this._currentBlobUrl);
+                this._currentBlobUrl = null;
+            }
             sessionStorage.removeItem('violin_pin');
             location.reload();
         });
@@ -589,19 +595,24 @@ class AudioPlayer {
     // ===== 트랙 & 웨이브폼 =====
 
     async loadTrack(filename) {
+        const loadId = ++this._loadId;
+
         this.currentFile = filename;
         const path = this.currentPath ? `${this.currentPath}/${filename}` : filename;
         const url = `/audio/${this.pin}/${encodeURIComponent(path)}`;
         this.trackNameOverlay.textContent = this.fmtName(filename);
 
-        // 이전 재생 정지 + 버튼 상태 즉시 동기화
+        // 이전 재생 정지 + Blob URL 해제
         this.audio.pause();
         this.updatePlayBtn(false);
+        if (this._currentBlobUrl) {
+            URL.revokeObjectURL(this._currentBlobUrl);
+            this._currentBlobUrl = null;
+        }
 
-        // 플레이어 먼저 표시
         this.playerSection.style.display = '';
 
-        // 웨이브폼 데이터를 먼저 fetch (한 번만 다운로드)
+        // 오디오 fetch (한 번만 다운로드)
         let audioBuf = null;
         try {
             const resp = await fetch(url);
@@ -610,24 +621,46 @@ class AudioPlayer {
             console.error('Audio fetch error:', err);
         }
 
-        // fetch한 데이터로 오디오 소스 설정 (네트워크 재요청 없음)
+        if (this._loadId !== loadId) return;
+
+        // fetch 데이터로 Blob URL 생성
         if (audioBuf) {
-            const blob = new Blob([audioBuf], { type: url.endsWith('.mp3') ? 'audio/mpeg' : 'audio/mp4' });
-            this.audio.src = URL.createObjectURL(blob);
+            const mime = filename.toLowerCase().endsWith('.mp3') ? 'audio/mpeg' : 'audio/mp4';
+            const blob = new Blob([audioBuf], { type: mime });
+            this._currentBlobUrl = URL.createObjectURL(blob);
+            this.audio.src = this._currentBlobUrl;
         } else {
             this.audio.src = url;
         }
         this.audio.load();
 
-        // 오디오 재생 가능할 때까지 대기
-        await new Promise(r => {
-            const ready = () => { this.audio.removeEventListener('canplay', ready); r(); };
-            if (this.audio.readyState >= 3) r();
-            else this.audio.addEventListener('canplay', ready);
+        // canplay 대기 (타임아웃 + 에러 처리)
+        const canPlayOk = await new Promise(r => {
+            let settled = false;
+            const done = (val) => { if (settled) return; settled = true; cleanup(); r(val); };
+            const onReady = () => done(true);
+            const onError = () => done(false);
+            const cleanup = () => {
+                this.audio.removeEventListener('canplay', onReady);
+                this.audio.removeEventListener('error', onError);
+                clearTimeout(timer);
+            };
+            if (this.audio.readyState >= 3) { r(true); return; }
+            this.audio.addEventListener('canplay', onReady);
+            this.audio.addEventListener('error', onError);
+            const timer = setTimeout(() => done(false), 15000);
         });
+
+        if (this._loadId !== loadId) return;
+
+        if (!canPlayOk) {
+            showToast('오디오 로드 실패', 3000);
+            return;
+        }
 
         // 캔버스 사이즈 확정 후 웨이브폼 그리기
         await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+        if (this._loadId !== loadId) return;
         this.resizeCanvas();
         if (audioBuf) {
             await this.generateWaveform(audioBuf);
@@ -715,7 +748,7 @@ class AudioPlayer {
 
     togglePlay() {
         if (this.audio.paused) {
-            this.audio.play().catch(() => {});
+            this.audio.play().catch(() => this.updatePlayBtn(false));
         } else {
             this.audio.pause();
         }
@@ -752,8 +785,12 @@ class AudioPlayer {
     }
 
     onEnded() {
-        if (this.loopEnabled) { this.audio.currentTime = this.loopStart; this.audio.play(); }
-        else this.updatePlayBtn(false);
+        if (this.loopEnabled) {
+            this.audio.currentTime = this.loopStart;
+            this.audio.play().catch(() => this.updatePlayBtn(false));
+        } else {
+            this.updatePlayBtn(false);
+        }
     }
 
     fmtTime(s) {
