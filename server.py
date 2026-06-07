@@ -132,6 +132,12 @@ class RequestHandler(SimpleHTTPRequestHandler):
                 self.handle_audio_request(parts[0], parts[1])
                 return
 
+        # PIN 단축 경로: /4670, /5858 → index.html 서빙 (클라이언트가 자동 로그인)
+        seg = path.strip('/')
+        if seg.isdigit() and len(seg) == 4:
+            self.serve_file(STATIC_DIR / 'index.html')
+            return
+
         # 정적 파일
         super().do_GET()
 

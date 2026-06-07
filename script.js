@@ -21,6 +21,13 @@ class App {
         this.loginSection = document.getElementById('loginSection');
         this.mainSection = document.getElementById('mainSection');
 
+        // URL 경로로 자동 로그인 (예: /5858, 루트는 기본 4670) - 암호 없이 바로 진입
+        const pathPin = this.getPinFromPath();
+        if (pathPin) {
+            this.autoLogin(pathPin);
+            return;
+        }
+
         // F5 새로고침 시 로그인 유지
         const savedPin = sessionStorage.getItem('violin_pin');
         if (savedPin) {
@@ -29,6 +36,32 @@ class App {
             return;
         }
 
+        this.initLogin();
+    }
+
+    // URL 경로에서 PIN 추출: /5858 → '5858', 루트(/) → '4670'(기본)
+    getPinFromPath() {
+        const m = window.location.pathname.match(/^\/(\d{4})\/?$/);
+        if (m) return m[1];
+        if (window.location.pathname === '/' || window.location.pathname === '') return '4670';
+        return null;
+    }
+
+    // 암호 입력 없이 PIN 검증 후 바로 메인으로 진입
+    async autoLogin(pin) {
+        try {
+            const res = await fetch(`/api/check-pin?pin=${pin}`);
+            const data = await res.json();
+            if (data.valid) {
+                this.currentPin = pin;
+                sessionStorage.setItem('violin_pin', pin);
+                this.showMain();
+                return;
+            }
+        } catch (err) {
+            // 무시하고 일반 로그인 화면으로
+        }
+        // 자동 로그인 실패 시 일반 PIN 입력 화면 표시
         this.initLogin();
     }
 
